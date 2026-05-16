@@ -1,7 +1,7 @@
 # marosjanco.com — Full Website Specification
 
 **Author:** Maroš Jančo
-**Version:** 1.1 (decisions resolved — build-ready)
+**Version:** 1.2 (decisions resolved + ICP sharpened + assets in — build-ready)
 **Intended use:** Hand to a Claude Code session (or any frontend engineer) to build the site end-to-end.
 
 ---
@@ -10,7 +10,7 @@
 
 This is a build spec, not a brief. Decisions are made, not offered as options. Where copy is provided, treat it as production-ready (edit lightly for voice if needed, but don't restructure). Where technical choices are specified, follow them unless there is a concrete reason not to. The opinionated nature is intentional — Maroš has iterated on positioning and direction; this document encodes the conclusions.
 
-**All open questions from v1.0 are now resolved (see the changelog directly below and §12).** There is exactly one fill-in remaining: the personal GitHub handle, marked `<MAROS-GITHUB-HANDLE>` everywhere it appears. Do not re-ask the resolved questions; build to the decisions as written.
+**All open questions are now resolved and there are zero remaining fill-ins** (see the changelogs below and §12). The GitHub handle (`marosjanco`) and the portrait photo are both in the repo. Do not re-ask resolved questions; build to the decisions as written.
 
 ### 0.1 Changelog — what was resolved in v1.1
 
@@ -18,12 +18,21 @@ This is a build spec, not a brief. Decisions are made, not offered as options. W
 |---|---|---|
 | Canonical domain | open | **marosjanco.com** (matches existing repo, favicons, manifest) |
 | Contact email | open | **maros@marosjanco.com** (personal, on-domain; forwarding required) |
-| GitHub in footer/JSON-LD | open | **Personal handle** (`<MAROS-GITHUB-HANDLE>`). Souli/dzino-app stays separate in §3.4 only |
-| Portrait photo | DECISION POINT | **Include.** Maroš will provide a real, natural-light headshot. Layout must still degrade gracefully if it slips |
+| GitHub in footer/JSON-LD | open | **Personal handle `marosjanco`** (github.com/marosjanco). Souli/dzino-app stays separate in §3.4 only |
+| Portrait photo | DECISION POINT | **Included.** Source committed at `assets/portrait-2021-source.jpg`; build optimises to `/public/portrait.*`. Graceful-degrade fallback retained |
 | §3.4 Lexomat duplication | DECISION POINT | **Souli alone**, single full-width card. Lexomat lives only in §3.3 |
 | Public pricing | DECISION POINT | **No published number in v1.** "Pricing on request" (on-voice wording in §3.5). Revisit trigger documented |
 | Analytics | DECISION POINT | **No analytics in v1** (Option A). Revisit at month 3 |
 | Existing repo state | not addressed | New §13: legacy static HTML + WordPress tree deleted outright (git is the archive); favicons kept or refreshed from the existing design |
+
+### 0.2 Changelog — v1.2 (ICP sharpened; final fill-ins closed)
+
+- **GitHub handle resolved: `marosjanco`** (github.com/marosjanco). No `<…>` placeholders remain anywhere in this document.
+- **Portrait photo received and committed:** `assets/portrait-2021-source.jpg` (7952×5304, colour, warm natural light, head-and-shoulders against a plain wall — already on-brief). §3.6 / §4.5 / §6.2 / §9.1 updated; the build session optimises it into `/public/portrait.{avif,webp,jpg}`.
+- **New §1.2.1 — explicit Ideal Customer Profile** (company stage, geography, verticals, three buyer personas, anti-targets). Replaces the prior "AI buyers in general" softness; it is the rationale behind the §3.3 and §3.5 copy.
+- **§3.3** — each case study gains a buyer-voice problem question (italic) between the role line and the headline.
+- **§3.5** — the "Engagements" column is rewritten in the buyer's voice (live problems, not a deliverables list).
+- The document now has **zero remaining fill-ins** and is ready to hand off.
 
 ---
 
@@ -56,6 +65,18 @@ Two audiences matter; design for both without compromising for either.
 **Audience B: Technical peers and recruiters.** They are evaluating Maroš for a full-time role, advisory role, or technical respect. They want to see: technical writing, code on GitHub, products shipped, depth of experience. They convert slower but they are the source of long-term referrals and reputation.
 
 Both audiences are served by the same content if it is concrete, technical, and unembellished. Marketing-speak hurts both audiences equally.
+
+### 1.2.1 Ideal customer profile (the buyer to convert)
+
+§1.2 describes who *reads* the page; this describes who the copy is *engineered to convert*. The site targets one specific buyer, not "companies that need AI" (that is everyone in 2026, and chasing all of them converts none). In one sentence: **engineering or product leaders at scaleup-to-mid-market companies (~30–500 people) that have already invested in AI, have something in or near production, and have hit a wall they lack senior AI talent to solve.**
+
+- **Company stage:** Series A–C startups, or established mid-market (€10–200M revenue), that have already spent €100K–€2M on AI in the last ~18 months and shipped *something* that isn't where it needs to be. Earlier-stage can't afford the rate; large enterprises buy via procurement/RFP (a different motion). Both are out of scope.
+- **Geography:** Primary — London, Berlin, Munich, Amsterdam, Zurich, Vienna. Secondary — Prague, Warsaw, Stockholm, Copenhagen. Tertiary — SK/CZ (lower rate, easier sale). **Not the US in v1** (different sales motion, network, rate expectations).
+- **Verticals where the CV does instant credibility work:** healthtech (Upheal), legaltech (Lexomat), fintech/capital markets (BNP Paribas), climate/ESG (Cervest). Strong generalist elsewhere; specialist here. Outbound is weighted to these four first.
+- **Three buyer personas (descending frequency):** (1) founder/CTO of a 30–80-person AI-native startup who is the only senior engineering voice in the room — wants a pressure valve, not a permanent senior hire they can't currently make; (2) VP Eng at a 100–300-person scaleup told by leadership to "have an AI strategy," with a team stuck on PoCs — wants the senior AI architect they don't have on staff, working alongside their team; (3) product/ops leader at an enterprise with one specific use case, frustrated with a vendor or internal team — shorter, more tactical, longer sales cycle, higher rate.
+- **The problem they have when they reach out** (this is the rationale for the §3.3 problem questions and the §3.5 Engagements copy): a specific technical failure in a system that *already exists* — "RAG retrieves the wrong docs and we can't diagnose why," "LLM costs are 4× what we modelled," "agent demos beautifully, breaks with real users," "prompts work in dev, break in prod," "told to ship an agent in Q3, team has never built one." Never a "should we use AI" question.
+- **Explicitly NOT targeting** (saying yes to everyone converts no one): pre-product founders wanting "AI strategy"; enterprises wanting a 12-month "AI transformation" programme; training/workshop buyers; US companies (v1); anyone asking for a discount before scope is defined; agencies wanting to subcontract "the AI part" at a squeezed rate.
+- **Outbound implication (context, not a build task):** this ICP is a buildable list — ~200 named EU/UK companies in the four verticals via Crunchbase / LinkedIn Sales Navigator / Sifted / Dealroom / EU-Startups, each contacted with an individually personalised message. ~10% reply → ~20 conversations → 2–3 conversions = year one.
 
 ### 1.3 Primary conversion goal
 
@@ -110,7 +131,7 @@ Minimal. Single row on desktop, stacked on mobile.
 ```
 
 - LinkedIn → `https://www.linkedin.com/in/maro%C5%A1-jan%C4%8Do-565a3535/` (Maroš's existing profile). **Pre-launch:** if Maroš sets a clean vanity URL (`linkedin.com/in/marosjanco`), use that instead and update §7.5 to match.
-- GitHub → `https://github.com/<MAROS-GITHUB-HANDLE>` (personal profile, not an org — see §3.4 note)
+- GitHub → `https://github.com/marosjanco` (personal profile, not an org — see §3.4 note)
 - Email → `mailto:` per §5.5
 - RSS → `/feed.xml`
 
@@ -166,11 +187,13 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 **Heading:** "Selected Work"
 
-**Layout:** A list of 4 case studies, each ~120–180 words. Vertically stacked, separated by horizontal rules. Each case study has the structure: company logo (small) + role + dates · headline sentence · 2–3 sentences of detail · technologies used (small caps or mono).
+**Layout:** A list of 4 case studies, each ~120–180 words. Vertically stacked, separated by horizontal rules. Each case study has the structure: company logo (small) + role + dates · *buyer-voice problem question (italic, on its own line)* · headline sentence · 2–3 sentences of detail · technologies used (small caps or mono).
 
 **Case Study 1: Upheal**
 
 > **Upheal** · Senior AI Engineer (Contract) · Nov 2023 – May 2026
+>
+> *How do you ship LLM products that don't regress in production, across 100+ releases?*
 >
 > Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of a Best-Startup-Award-winning AI documentation platform for therapists.
 >
@@ -182,6 +205,8 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **Cervest** · Senior Data Scientist · Jul 2021 – Jul 2023
 >
+> *How do you ship production ML over TBs of multi-source data, where the predictions bear real financial risk?*
+>
 > Built from scratch the first physical-climate-impact platform assessing combined-hazard damages on assets and portfolios worldwide. The company won the Global Impact 50 Award 2023.
 >
 > Led a global wildfire-damage prediction product end-to-end. Built a company → subsidiary → asset framework for SP500 and FTSE100 firms; shipped a financial-impact model predicting stock-price shocks from adverse climate events. Optimised distributed pipelines over TBs of geospatial, satellite and financial data.
@@ -192,6 +217,8 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **BNP Paribas** · Machine Learning Researcher · Jun 2017 – Jun 2021
 >
+> *How do you ship NLP models that run daily in mission-critical workflows, year after year?*
+>
 > Built and deployed NLP models for a global investment bank's AI lab.
 >
 > Built a history-augmented collaborative-filtering recommender for client document recommendations; weekly chatbot recommendations save thousands of clients hours of search across thousands of documents. Designed and shipped an NLP entity-extraction system combining Random Forests, GBT, Kneser-Ney n-gram LMs, Naive Bayes and Word2Vec into one classifier; later scaled with LSTM- and BERT-based architectures. A dozen+ resulting NER models now automate chat-to-price FX execution worldwide on a daily basis.
@@ -201,6 +228,8 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 **Case Study 4: Lexomat (founder)**
 
 > **Lexomat** · Founder · 2024 – Present · [lexomat.sk →](https://lexomat.sk)
+>
+> *How do you ship LLM systems that domain experts will trust to use daily?*
 >
 > Solo-founded AI legal-research chat for Slovak and Czech law, indexing millions of legal documents. Used by legal professionals through FinAI s.r.o.
 >
@@ -213,6 +242,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 - No screenshots in case studies on the homepage (keep it text-dense and scannable). Screenshots can live on dedicated case study pages in a v2.
 - Treat the stack line as metadata; render slightly muted, in mono or smaller size.
 - Logos appear inline with company name as small icons, monochrome.
+- The italic problem question sits on its own line between the role/dates line and the headline sentence. Render it in the body color (do **not** mute it toward invisibility) at body size, italic. This is the line that makes a matching buyer think "that's exactly my situation" — it must be legible, not decorative. A non-matching visitor scrolls past, which is correct.
 
 ### 3.4 Open Source / Side Projects
 
@@ -231,7 +261,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 **Resolved:** Lexomat is a founder credential and lives only in §3.3 Selected Work — it is **not** repeated here. This section features Souli alone in v1.
 
 **GitHub-link rule (important — two different links, two different intents):**
-- **Footer + JSON-LD `sameAs`** → Maroš's *personal* profile (`https://github.com/<MAROS-GITHUB-HANDLE>`). The visitor there is evaluating *the person*; landing on an org root creates "where's Maroš?" friction.
+- **Footer + JSON-LD `sameAs`** → Maroš's *personal* profile (`https://github.com/marosjanco`). The visitor there is evaluating *the person*; landing on an org root creates "where's Maroš?" friction.
 - **This Souli card** → the *repo* directly (`https://github.com/dzino-app/souli.app`), not the dzino-app org root. The visitor here is evaluating *the project*.
 - Pre-launch task for Maroš (not a build task): profile README, 4–6 pinned repos, one-line bio matching the site headline, site URL in profile. A sparse-but-curated senior profile reads fine; an empty one reads mildly negative.
 
@@ -245,7 +275,9 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **Engagements**
 >
-> Typical engagements run 1–3 months, focused on a specific delivery — an evaluation framework, a RAG productionisation, an architecture review, an agentic system from prototype to production. I take on a small number of clients at a time.
+> Most engagements start with a conversation like: "our RAG retrieves the wrong documents and we can't diagnose why," "our LLM costs are 4x what we modeled," "our agent demos beautifully but breaks with real users," or "we need an evaluation framework before our next release."
+>
+> Typically 1–3 months, scoped per problem. I take on a small number of clients at a time.
 
 **Column 2: Pricing**
 
@@ -264,13 +296,14 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 - **The 24-hour commitment is binding.** If it becomes false, change the copy — don't let it rot.
 - **Standards still hold privately.** "Priced in the first call" does not mean "match whatever the buyer can pay." The private floor is ~€1,500/day remote / ~€2,000/day onsite. Do not take sub-€1,200/day work — a low first engagement anchors the whole referral trajectory downward.
 - **Revisit trigger (write this into the project's running notes, not the site):** switch to *published* pricing — `Day rate from €1,500 (remote) to €2,000 (onsite, EU/UK hubs). Fixed-scope projects available for clearly bounded work.` — only **after Maroš has quoted and won three engagements at €1,500+/day.** Three wins prove the market clears the number and supply the confidence floor published pricing requires. This is a v2 copy change to this exact column; the layout must not need to change to accommodate it.
+- **Buyer-voice framing is deliberate.** The Engagements quotes and the §3.3 problem questions are stylistically linked — buyer's voice, live concerns, not deliverables or CV bullets. This shifts the whole page toward "an engineer who engages with your specific problem" and away from "a CV in HTML." If any of it reads too sales-y for Maroš's taste, the fix is *fewer quotes* (e.g. three in Engagements, not four) — not removing the format.
 - This three-column block is what separates a specialist site from a freelancer site. Keep it.
 
 ### 3.6 About
 
 **Heading:** "About"
 
-**Layout:** Two-column on desktop: left column is a portrait photo (B&W or warm-toned, professional but not corporate — natural light, not a studio suit shot), right column is 4 short paragraphs. Stacked on mobile with photo above.
+**Layout:** Two-column on desktop: left column is the portrait photo (colour, warm natural light against a plain wall — `assets/portrait-2021-source.jpg`), right column is 4 short paragraphs. Stacked on mobile with photo above.
 
 **Copy:**
 
@@ -282,7 +315,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 >
 > Outside work I'm building a family home in Nolčovo (northern Slovakia), raising young children, and reading too much about energy markets and language models. I speak English, Slovak, Czech and beginner German.
 
-**Resolved:** Photo is **included**. Maroš will supply a real, warm, natural-light headshot at `/public/portrait.jpg` (and an `@2x`/AVIF/WebP variant — see §6.4). Build the layout so that if the photo asset is missing at build time, the right column gracefully takes full width rather than rendering a broken image — so a photo slip never blocks launch.
+**Resolved:** Photo is **included and provided**. The source headshot is committed at `assets/portrait-2021-source.jpg` — 7952×5304, colour, warm natural light, head-and-shoulders, plain warm wall (already on-brief; pairs well with the `#FAFAF7` background). Build session: optimise it into `/public/portrait.avif`, `.webp`, `.jpg` at a ~4:5 or 1:1 crop centred on the face, display weight ≤ ~80KB (see §6.4), served via `next/image` with explicit dimensions (no layout shift). Keep the graceful-degrade fallback (right column takes full width if the asset is ever absent) as defensive code. No B&W treatment — use it in colour as shot.
 
 ### 3.7 Writing (preview)
 
@@ -414,7 +447,7 @@ Single column for body text. No multi-column body anywhere except the "How I Wor
 ### 4.5 Imagery & assets
 
 **Do include:**
-- One professional portrait photo of Maroš (§3.6). B&W or warm-toned, natural light.
+- The portrait photo of Maroš (§3.6): colour, warm natural light. Source committed at `assets/portrait-2021-source.jpg`; optimise — do not replace with stock/AI.
 - Monochrome logos for Upheal, Cervest, BNP Paribas, Imperial, UCL (§3.2). Source from official brand resources; recreate from wordmarks if unavailable.
 - Optional small inline logos for case studies (§3.3) — only if they don't add clutter.
 - An Open Graph image (1200×630px) — see §7.
@@ -513,13 +546,15 @@ Decoded:
 │   ├── cv/page.tsx                 # HTML CV
 │   ├── not-found.tsx               # 404
 │   └── api/                        # (empty in v1)
+├── assets/                         # source assets, NOT served — already in repo
+│   └── portrait-2021-source.jpg    # high-res original; build optimises into /public
 ├── components/                     # per §4.6
 ├── content/
 │   └── writing/                    # MDX posts (initially empty)
 ├── public/
 │   ├── logos/                      # Monochrome SVG company logos
 │   ├── projects/
-│   ├── portrait.jpg                # Maroš's portrait (+ AVIF/WebP variants)
+│   ├── portrait.{avif,webp,jpg}    # optimised from /assets/portrait-2021-source.jpg
 │   ├── og.png                      # Open Graph image
 │   ├── cv.pdf
 │   └── favicon.svg                 # plus migrated legacy favicon set, §13
@@ -606,7 +641,7 @@ Homepage `<head>`:
   "jobTitle": "Senior AI Engineer",
   "sameAs": [
     "https://www.linkedin.com/in/maro%C5%A1-jan%C4%8Do-565a3535/",
-    "https://github.com/<MAROS-GITHUB-HANDLE>"
+    "https://github.com/marosjanco"
   ],
   "alumniOf": [
     { "@type": "EducationalOrganization", "name": "University College London" },
@@ -662,9 +697,9 @@ Track manually (notion/spreadsheet): inbound emails per month + source, conversi
 
 - [ ] Legacy tree deleted per §13 (favicons kept or refreshed); clean Next.js project on a branch
 - [ ] All copy reviewed and approved by Maroš
-- [ ] Portrait photo received and placed at `/public/portrait.jpg` (+ variants); About degrades gracefully if absent
+- [ ] Portrait optimised from `assets/portrait-2021-source.jpg` into `/public/portrait.{avif,webp,jpg}`; About degrades gracefully if absent
 - [ ] All 5 company logos sourced as monochrome SVGs
-- [ ] `<MAROS-GITHUB-HANDLE>` filled in (footer + JSON-LD); personal profile has README/bio/pinned repos/site link
+- [ ] GitHub `marosjanco` wired in footer + JSON-LD; personal profile has README/bio/pinned repos/site link (Maroš's pre-launch task)
 - [ ] LinkedIn URL confirmed (existing or new vanity)
 - [ ] CV PDF placed at `/public/cv.pdf`; `/cv` HTML view mirrors it
 - [ ] `maros@marosjanco.com` forwarding configured and a live test email received
@@ -729,15 +764,15 @@ All v1.0 open questions are resolved. For the building session:
 
 1. Domain: **marosjanco.com**.
 2. Email: **maros@marosjanco.com** (forwarding to be configured pre-launch).
-3. GitHub: **personal handle** in footer + JSON-LD (`<MAROS-GITHUB-HANDLE>` — the only fill-in). Souli repo link is separate, in §3.4 only.
-4. Portrait photo: **included**; Maroš provides it; layout degrades gracefully if it slips.
+3. GitHub: **`marosjanco`** in footer + JSON-LD (`https://github.com/marosjanco`). Souli repo link is separate, in §3.4 only.
+4. Portrait photo: **included**; source committed at `assets/portrait-2021-source.jpg`; build optimises into `/public/portrait.*`; graceful-degrade fallback retained.
 5. Pricing: **no public number in v1**; on-voice "priced in the first call" copy in §3.5; private floor and revisit trigger documented there.
 6. "A small number of clients at a time" (not a hard cap of two).
 7. Case studies §3.3: Upheal, Cervest, BNP Paribas, Lexomat — as written, no additions/removals.
 8. Writing placeholder copy: **approved** until first post ships.
 9. Analytics: **none in v1**.
 
-The single remaining fill-in is `<MAROS-GITHUB-HANDLE>`. If still unknown at build time, ship every other element and leave the GitHub footer link + JSON-LD `sameAs` entry as a clearly-commented `TODO` rather than guessing a handle or omitting the personal-profile decision.
+There are **no remaining fill-ins**. The GitHub handle (`marosjanco`) and the portrait photo (`assets/portrait-2021-source.jpg`) are both in the repo. Build to the spec exactly as written.
 
 ---
 
