@@ -6,16 +6,9 @@ tags: ["llm", "evaluation", "production", "mlops"]
 draft: true
 ---
 
-{/*
-DRAFT — Maroš: this one needs a confidentiality pass before publishing.
-It is written deliberately at the level of GENERAL engineering principles only.
-It contains NO Upheal-internal numbers, architecture, datasets, model choices,
-or product specifics. Keep it that way — if you add concrete detail, make sure
-it is your own general experience and not anything Upheal-confidential.
-Set draft:false only after you've reviewed it on that basis.
-*/}
+{/* DRAFT — general guidance, not about any specific employer or product. Maroš to review/edit; set draft:false to publish. */}
 
-"LLM-as-judge" is now standard practice for evaluating language model outputs at scale. The recipe is well known: use one model to grade another model's outputs against a rubric, calibrate the judge against human labels, run it in CI to catch regressions. That recipe is also where most teams stop. Doing it well in production — where the eval system actually catches problems before they reach users — means solving several problems the basic version does not mention. These are general lessons from years of building and running production evals; none of the specifics below are tied to any one employer's internal system.
+"LLM-as-judge" is now standard practice for evaluating language model outputs at scale. The recipe is well known: use one model to grade another model's outputs against a rubric, calibrate the judge against human labels, run it in CI to catch regressions. That recipe is also where most teams stop. Doing it well in production — where the eval system actually catches problems before they reach users — means solving several problems the basic version does not mention. What follows is general: it applies to any production LLM system that needs to know whether its outputs are getting better or worse.
 
 ## A production eval system has three jobs, not one
 
