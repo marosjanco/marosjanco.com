@@ -10,14 +10,14 @@
   --accent: #1f3a68;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f0f;
-    --fg: #edede8;
-    --muted: #8c8c88;
-    --subtle: #2a2a2a;
-    --accent: #7ba3d9;
-  }
+/* Dark palette — applied via the `.dark` class that next-themes sets on
+   <html> (covers explicit Dark and resolved System). */
+.dark {
+  --bg: #0f0f0f;
+  --fg: #edede8;
+  --muted: #8c8c88;
+  --subtle: #2a2a2a;
+  --accent: #7ba3d9;
 }
 
 @theme inline {

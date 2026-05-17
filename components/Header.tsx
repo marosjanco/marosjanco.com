@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { site, mailtoHref } from "@/lib/site";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -42,6 +43,7 @@ export function Header() {
           >
             Email me
           </a>
+          <ThemeToggle />
         </nav>
       </div>
     </header>

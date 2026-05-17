@@ -34,6 +34,17 @@ This is a build spec, not a brief. Decisions are made, not offered as options. W
 - **§3.5** — the "Engagements" column is rewritten in the buyer's voice (live problems, not a deliverables list).
 - The document now has **zero remaining fill-ins** and is ready to hand off.
 
+### 0.3 Changelog — v1.3 (built, deployed, post-launch refinements)
+
+The site is **built and live** (Next.js 15, Vercel git-connected to `master`, custom domain `marosjanco.com` → `www`). This spec section records where the shipped site intentionally differs from / extends earlier copy:
+
+- **Theme switch added** (Light / System / Dark, header). Earlier "no toggle in v1" is superseded — see §2.2 and §4.2.
+- **Hero capacity signal** added: "Currently available for new engagements." (in `lib/site.ts`, reviewed monthly).
+- **Copy refinements** (live): §3.3 Upheal drops "Best-Startup-Award-winning"; §3.4 Souli gains a buyer-voice question; §3.5 Working style "working hybrid" not "hybrid roles".
+- **`/writing`** has a substantive placeholder + its own OG metadata; blog uses MDX with a `draft:` flag (drafts excluded from listings/sitemap/RSS and 404 in production; render only on local dev).
+- **Trust bar / favicons / cv.pdf** v1 deviations from §3.2/§9 still stand (text wordmarks, migrated favicons, HTML `/cv` only).
+- **Blog content rule:** posts are written generally — no Upheal / employer-experience framing (confidentiality). Lexomat (own product) is fine in depth.
+
 ---
 
 ## 1. Strategic Foundation
@@ -120,7 +131,7 @@ Top of every page. Sticky on scroll, semi-transparent backdrop blur.
 - Left: name as logotype, links to `/`
 - Right: three links. "Writing" → `/writing`. "CV" → `/cv`. "Email me" → `mailto:` (see §5.5)
 - No hamburger menu on mobile — three links fit fine
-- No dark/light mode toggle in v1 (system preference only, see §4.2)
+- Header theme switch: Light / System / Dark (System default, see §4.2)
 
 ### 2.3 Footer
 
@@ -157,6 +168,8 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 >
 > Currently taking a small number of consulting engagements. Based in Slovakia, working with clients across Europe and the UK.
 >
+> ● Currently available for new engagements.
+>
 > [See recent work ↓]    [Email me →]
 
 **Notes:**
@@ -164,6 +177,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 - Body in sans, ~20–22px desktop, ~17px mobile, max-width ~600px.
 - Two CTAs as text-button hybrids: "See recent work" scrolls to §3.3; "Email me" triggers mailto.
 - No "Book a call" button, no Calendly embed.
+- Capacity line rendered as a small accent-coloured line with a dot, between the second paragraph and the CTAs. Sourced from `site.capacity` in `lib/site.ts`; must stay true (review monthly).
 
 ### 3.2 Trust bar
 
@@ -195,7 +209,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 >
 > *How do you ship LLM products that don't regress in production, across 100+ releases?*
 >
-> Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of a Best-Startup-Award-winning AI documentation platform for therapists.
+> Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of an AI clinical-documentation platform for therapists (Best Startup Award winner).
 >
 > Owned quality and shipped 100+ production releases. Built an LLM-as-judge eval framework on Langfuse with datasets, eval runs and trace-level debugging. Productionised RAG, prompt orchestration and agentic patterns across Gemini, Claude, GPT-* and Llama; benchmarked Vertex AI, Bedrock, Azure OpenAI and Anthropic for quality, latency and cost. Automated a Claude-Agent-SDK customer-support agent. Reported AI roadmap and cost trade-offs directly to founders.
 >
@@ -254,6 +268,8 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **Souli** · open-source · [github.com/dzino-app/souli.app →](https://github.com/dzino-app/souli.app)
 >
+> *How do you build a useful AI companion without sending plaintext chat to a third-party model?*
+>
 > End-to-end encrypted AI companion that gamifies personal growth across social, health, career and personal aspects. Privacy-first architecture — chat content is encrypted end-to-end, including in transit to and from the model.
 >
 > Open-sourced May 2026. Full-stack TypeScript + privacy engineering.
@@ -289,7 +305,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **Working style**
 >
-> Remote-first from Slovakia with regular travel — comfortable with hybrid roles across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich, Prague, Vienna) on a roughly monthly cadence. Async-friendly, English, EU/UK timezones.
+> Remote-first from Slovakia with regular travel — comfortable working hybrid across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich, Prague, Vienna) on a roughly monthly cadence. Async-friendly, English, EU/UK timezones.
 
 **Notes (read before changing this section):**
 - **No public price in v1 is a deliberate decision, not an omission.** The reasoning: published pricing only works when the seller can defend the exact number on a call without flinching. Maroš is newly independent and hasn't yet quoted real clients; published-pricing confidence comes from quoting reps, not from a value in a component. "Pricing on request" delays *transparency*, not *standards*.
@@ -407,7 +423,7 @@ Anti-references (do NOT look like these):
 - Subtle: `#2A2A2A`
 - Accent: `#7BA3D9` (lighter navy for legibility on dark)
 
-No toggle button in v1. Respect `prefers-color-scheme`. Add toggle in v2 if requested. No additional colors. No gradients. No semantic color (success/warning/error) — nothing on the site needs them.
+Header theme switch: Light / System / Dark. System is the default and respects `prefers-color-scheme`. Implemented with next-themes (class strategy on `<html>`, blocking script prevents flash; dark palette under the `.dark` class in `globals.css`). No additional colors. No gradients. No semantic color (success/warning/error) — nothing on the site needs them.
 
 ### 4.3 Typography
 
