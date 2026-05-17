@@ -6,6 +6,11 @@ import { HowIWork } from "@/components/home/HowIWork";
 import { About } from "@/components/home/About";
 import { WritingPreview } from "@/components/home/WritingPreview";
 import { Contact } from "@/components/home/Contact";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default function HomePage() {
   return (

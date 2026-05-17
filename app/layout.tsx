@@ -32,8 +32,26 @@ export const metadata: Metadata = {
     template: "%s — Maroš Jančo",
   },
   description: site.description,
+  applicationName: site.name,
+  authors: [{ name: site.name, url: site.url }],
+  creator: site.name,
+  publisher: site.name,
+  category: "technology",
+  keywords: [
+    "AI engineer",
+    "LLM consultant",
+    "production LLM systems",
+    "RAG",
+    "LLM evaluation",
+    "agentic systems",
+    "MLOps",
+    "AI consulting Europe",
+    "Maroš Jančo",
+  ],
+  formatDetection: { email: false, telephone: false, address: false },
+  // No global canonical — each route declares its own (avoids every page
+  // canonicalising to "/"). RSS discovery is global and stays here.
   alternates: {
-    canonical: "/",
     types: { "application/rss+xml": "/feed.xml" },
   },
   openGraph: {
@@ -42,6 +60,7 @@ export const metadata: Metadata = {
     title: site.title,
     description: site.description,
     siteName: site.name,
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
@@ -66,17 +85,63 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 };
 
-const personJsonLd = {
+const knowsAbout = [
+  "Large language models",
+  "LLM evaluation",
+  "Retrieval-augmented generation",
+  "Agentic AI systems",
+  "Prompt engineering",
+  "MLOps",
+  "Production machine learning",
+  "Natural language processing",
+];
+
+const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "Person",
-  name: site.name,
-  url: site.url,
-  jobTitle: site.role,
-  email: `mailto:${site.email}`,
-  sameAs: [site.links.linkedin, site.links.github],
-  alumniOf: [
-    { "@type": "EducationalOrganization", name: "University College London" },
-    { "@type": "EducationalOrganization", name: "Imperial College London" },
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": `${site.url}/#person`,
+      name: site.name,
+      url: site.url,
+      jobTitle: site.role,
+      description: site.description,
+      email: `mailto:${site.email}`,
+      image: `${site.url}/portrait.jpg`,
+      address: { "@type": "PostalAddress", addressCountry: "SK" },
+      knowsAbout,
+      sameAs: [site.links.linkedin, site.links.github],
+      alumniOf: [
+        {
+          "@type": "EducationalOrganization",
+          name: "University College London",
+        },
+        {
+          "@type": "EducationalOrganization",
+          name: "Imperial College London",
+        },
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${site.url}/#website`,
+      url: site.url,
+      name: site.title,
+      description: site.description,
+      inLanguage: "en",
+      publisher: { "@id": `${site.url}/#person` },
+    },
+    {
+      "@type": "ProfessionalService",
+      "@id": `${site.url}/#service`,
+      name: `${site.name} — ${site.role}`,
+      url: site.url,
+      description: site.description,
+      provider: { "@id": `${site.url}/#person` },
+      areaServed: ["Europe", "United Kingdom"],
+      serviceType: "Production LLM systems consulting",
+      knowsAbout,
+    },
   ],
 };
 
@@ -94,7 +159,7 @@ export default function RootLayout({
       <body>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <ThemeProvider>
           <a

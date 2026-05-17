@@ -1,11 +1,24 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/Container";
 
+const cvDescription =
+  "Curriculum vitae of Maroš Jančo — senior AI engineer. 9+ years shipping production ML, NLP and LLM systems. Ex-Upheal, Cervest, BNP Paribas.";
+
 export const metadata: Metadata = {
   title: "CV",
-  description:
-    "Curriculum vitae of Maroš Jančo — senior AI engineer. 9+ years shipping production ML, NLP and LLM systems.",
+  description: cvDescription,
   alternates: { canonical: "/cv" },
+  openGraph: {
+    type: "profile",
+    url: "/cv",
+    title: "CV — Maroš Jančo",
+    description: cvDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CV — Maroš Jančo",
+    description: cvDescription,
+  },
 };
 
 type Role = {
