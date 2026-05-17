@@ -1,0 +1,20 @@
+# Maroš Jančo
+
+> Senior AI engineer specialising in production LLM systems. Founder of Lexomat.
+> Available for consulting engagements with EU/UK clients.
+
+## Background
+
+- 9+ years shipping ML, NLP and LLM systems
+- Ex-Upheal (Senior AI Engineer, 2023-2026), Cervest (Senior Data Scientist, 2021-2023), BNP Paribas (ML Researcher, 2017-2021)
+- MSc Machine Learning, UCL; BSc Mathematics, Imperial College London
+- Founder of Lexomat (lexomat.sk), AI legal-research for Slovak/Czech law
+
+## Services
+
+- Production LLM system consulting (prompts, evals, RAG, agentic, MLOps)
+- 1-3 month engagements, a small number of clients at a time
+
+## Contact
+
+- Email: maros@marosjanco.com
