@@ -1,0 +1,67 @@
+---
+title: "Notes on benchmarking LLM providers in production"
+date: "2026-07-10"
+summary: "What actually matters when you compare LLM providers under real traffic — and why the methodology outlives any number you could publish."
+tags: ["llm", "infrastructure", "cost", "mlops"]
+draft: true
+---
+
+{/*
+DRAFT — Maroš: confidentiality pass needed before publishing.
+This is written as METHODOLOGY ONLY. There are deliberately NO concrete
+Upheal-internal cost, latency, or quality figures presented as data. The
+ranges mentioned are generic industry-illustrative, not disclosed numbers.
+Keep it that way; if you add real figures, make sure they are publicly
+shareable and not employer-confidential. Set draft:false after reviewing.
+*/}
+
+Almost every team I talk to has either over-committed or under-committed to a single LLM provider. Both are expensive in different ways. This is a methodology post, not a benchmark dump — partly on principle, and partly because anyone publishing model numbers in 2026 is publishing data with a roughly six-month half-life. The numbers age out. The method does not.
+
+## Why single-provider is increasingly the wrong default
+
+A few years ago, committing entirely to one provider was defensible — capability gaps were large. That has changed:
+
+- Capability at the top tier has converged for most production tasks.
+- Per-token cost for similar quality varies by a meaningful multiple across providers.
+- Latency varies by provider, model, region, and time of day.
+- Provider downtime is not zero, and your uptime cannot be capped by theirs.
+
+None of this argues for per-request adaptive routing — most teams do not need that and the complexity rarely pays off. It argues for one primary, one validated fallback, and the ability to switch without a rewrite.
+
+## "Quality" means your tasks, not the leaderboard
+
+Public benchmarks measure capability on tasks you do not run. They are useful for a rough tier sort and almost nothing else. To choose a provider you need a small set of evals built from your own workload — on the order of a few dozen cases, enough to discriminate between providers, re-run on a schedule. The discipline that makes this trustworthy is the same as for any eval system; I wrote about that separately. The short version: curate hard cases from real traffic, calibrate any model-graded scoring against humans, and re-run when models change underneath you.
+
+## Cost is more variable than the price sheet
+
+The per-token price is the start of the cost analysis, not the end. For the same prompt and the same model class, the real bill differs across providers for non-obvious reasons:
+
+- default behaviours that change token counts,
+- retry and timeout policies,
+- whether prompt caching is available and how it is priced,
+- batched versus streaming pricing,
+- regional pricing differences.
+
+The only way to get a real number is to run representative production traffic patterns through each option and measure the invoice, not the estimate. A spreadsheet built from list prices will be wrong by a margin large enough to flip a decision.
+
+## The case for a gateway provider even when direct is cheaper
+
+Going through a cloud gateway (rather than a model vendor directly) often looks marginally more expensive on per-token price. It can still be the right call, because the price sheet does not capture:
+
+- compliance and audit trail,
+- data-residency control,
+- billing aggregation across models and teams,
+- regional failover.
+
+For a regulated or data-sensitive product, compliance posture is a real line item even when it does not appear on the pricing page. "Cheaper per token, direct" can be more expensive once the compliance work it forces onto you is counted.
+
+## What I actually recommend
+
+- Pick one primary and one fallback. Validate that the fallback genuinely works under load — an untested fallback is not a fallback.
+- Put a thin abstraction between your code and the provider so switching is a config change, not a refactor.
+- Keep a small, workload-specific benchmark and re-run it on a cadence and whenever a model changes.
+- Do not over-engineer routing. Most teams need confidence that failover works, not per-request provider selection.
+
+## The honest caveat
+
+Any concrete cost, latency, or quality numbers in a post like this have a six-month half-life. Models reprice, new versions ship, latency profiles move. That is exactly why this post has no table of figures to screenshot. The durable artifact is the method: your own evals, real-traffic cost measurement, a tested fallback, and a thin switching layer. Build that and the specific provider you pick this quarter stops being a high-stakes decision — which is the actual goal.

@@ -32,7 +32,10 @@ export default async function PostPage({
 }) {
   const { slug } = await params;
   const post = getPost(slug);
-  if (!post) notFound();
+  // Drafts render only in local dev (npm run dev) for review; 404 in production.
+  if (!post || (post.draft && process.env.NODE_ENV === "production")) {
+    notFound();
+  }
 
   return (
     <Container width="reading" className="py-20 md:py-28">

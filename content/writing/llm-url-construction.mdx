@@ -1,0 +1,65 @@
+---
+title: "Why I stopped letting the LLM construct URLs"
+date: "2026-06-12"
+summary: "A small architectural change that eliminated a whole class of hallucinations in Lexomat's citation system — and the principle behind it."
+tags: ["llm", "rag", "architecture", "lexomat"]
+draft: true
+---
+
+{/* DRAFT for Maroš to review. Lexomat is your own product, so depth here is fine — but verify the slov-lex specifics and the production claim before publishing. Set draft:false to go live. */}
+
+Lexomat is an AI legal-research chat for Slovak and Czech law. Lawyers ask it questions; it answers with citations to specific paragraphs of specific acts. Those citations link to slov-lex.sk — the official Slovak legal portal — so a user can open the source and verify every claim against the primary text. Early in the build I let the model generate those URLs as part of its answer. That was a mistake, and the way I fixed it generalises to almost any LLM system that has to cite external sources.
+
+## The problem
+
+Large language models are very good at recognising URL patterns and surprisingly bad at constructing valid ones. A slov-lex URL encodes an act number, a year, an effective date, and sometimes a specific paragraph anchor. The model would confidently produce something that looked exactly right: the correct domain, the correct path structure, a plausible date, a paragraph anchor in the right format. Sometimes it was correct. Sometimes the effective date was off, or the paragraph anchor pointed at a section that did not exist, or the act number was transposed.
+
+The failure mode that mattered was not the obviously broken link. It was the link that looked authoritative, resolved to a real page, and showed the wrong provision. A lawyer following a citation to confirm a point does not expect the citation itself to be subtly wrong. In a legal product that is not a rough edge, it is a credibility-ending defect.
+
+## Why "just prompt better" does not fix it
+
+The instinct is to tighten the prompt. Give the model the URL schema. Add few-shot examples of correct URLs. Tell it, firmly, to be careful. I tried all of this. It moves the error rate around; it does not remove the error.
+
+The reason is structural. Constructing a slov-lex URL from a citation is a deterministic transformation: given the act, year, and paragraph, there is exactly one correct URL, derivable by a rule. Asking a probabilistic next-token model to perform a deterministic transformation is the wrong tool for the job in the same way that asking it to add two seven-digit numbers is the wrong tool. It will be right most of the time. "Most of the time" is the problem, because the failures are silent and the domain does not tolerate them.
+
+## The architectural fix
+
+Stop letting the model emit URLs at all. Have it emit *structured citation metadata*, and have the backend construct the URL from a verified index.
+
+Concretely, the model's job became to produce a citation object:
+
+```json
+{
+  "citation": {
+    "act_number": 40,
+    "year": 1964,
+    "section": 588,
+    "subsection": 1,
+    "letter": "a"
+  }
+}
+```
+
+The backend takes that object and resolves it against a maintained index of slov-lex documents. It either returns a verified, canonical URL — or, just as important, it flags the citation as unresolvable and the answer is degraded gracefully rather than presented with a confident broken link. The model identifies *what* to cite. The system decides *how* to cite it, and whether the citation can be trusted at all.
+
+There is a second hard sub-problem worth naming: pre-1993 Czechoslovak legal references are ambiguous, because the citation formats from the federation overlap with the later Slovak and Czech ones. The resolution layer has to disambiguate these deterministically, which is exactly the kind of work you want in code with test cases, not in a prompt.
+
+## What changed in production
+
+Hallucinated URLs went to zero. Not "lower" — gone, because the model can no longer produce that artifact. Other hallucination classes still exist; this technique does not touch the model's tendency to misstate the *content* of a provision. But an entire category of error was removed by removing the model's ability to produce the thing that carried it.
+
+The second-order effect was more interesting. Narrowing the model's responsibility made its remaining output more trustworthy and easier to reason about. A model asked to do less, in a more structured way, fails in fewer places and fails more visibly.
+
+## The general principle
+
+Anything in your LLM output that has a deterministic correct form should be produced by code from structured model output, not by the model directly. URLs. Dates. Currency formatting. ID lookups. Arithmetic. SQL against a schema you control. The model's job is to decide *what*; the system's job is to construct *how*.
+
+This is not a Lexomat-specific trick. It is a separation-of-concerns boundary that most production LLM systems get wrong in at least one place, usually because the demo worked and nobody went back to harden it.
+
+## Why this also makes evaluation tractable
+
+There is a quieter benefit. When the citation is a structured field, you can evaluate it directly: parse the field, check the act and paragraph against the index, measure accuracy as a number. You cannot do that when the URL is embedded in a free-form paragraph — there, you are reduced to fuzzy string checks or another model grading the prose. Pulling deterministic artifacts out of free-form generation does not just reduce hallucination; it gives you something you can actually test.
+
+## Closing
+
+Most LLM systems I have looked at have at least one place where the model is being asked to emit a deterministic artifact inside free-form text. Finding those and refactoring them is some of the highest-leverage work in production LLM engineering. It does not require a better model. It requires drawing the boundary between what the model decides and what the system constructs in the right place — and then not letting the model cross it.

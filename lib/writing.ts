@@ -8,6 +8,7 @@ export type PostMeta = {
   date: string;
   summary: string;
   tags: string[];
+  draft: boolean;
 };
 
 export type Post = PostMeta & { content: string };
@@ -19,6 +20,11 @@ function readDir(): string[] {
   return fs.readdirSync(CONTENT_DIR).filter((f) => f.endsWith(".mdx"));
 }
 
+function isDraft(data: Record<string, unknown>): boolean {
+  return data.draft === true;
+}
+
+// Drafts never appear in listings, sitemap, or RSS — in any environment.
 export function getAllPosts(): PostMeta[] {
   return readDir()
     .map((file) => {
@@ -30,8 +36,10 @@ export function getAllPosts(): PostMeta[] {
         date: String(data.date ?? ""),
         summary: String(data.summary ?? ""),
         tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+        draft: isDraft(data),
       };
     })
+    .filter((p) => !p.draft)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
@@ -45,6 +53,7 @@ export function getPost(slug: string): Post | null {
     date: String(data.date ?? ""),
     summary: String(data.summary ?? ""),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    draft: isDraft(data),
     content,
   };
 }
