@@ -1,4 +1,4 @@
-import { mailtoHref } from "@/lib/site";
+import { site, mailtoHref } from "@/lib/site";
 import { Container } from "@/components/Container";
 
 export function Hero() {
@@ -17,6 +17,13 @@ export function Hero() {
           <p className="mt-4 max-w-[600px] text-[17px] leading-[1.5] text-muted md:text-[21px]">
             Currently taking a small number of consulting engagements. Based in
             Slovakia, working with clients across Europe and the UK.
+          </p>
+          <p className="mt-7 inline-flex items-center gap-2 text-[15px] font-medium text-accent">
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 rounded-full bg-accent"
+            />
+            {site.capacity}
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 text-[16px]">
             <a

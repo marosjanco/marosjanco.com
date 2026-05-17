@@ -3,11 +3,24 @@ import Link from "next/link";
 import { Container } from "@/components/Container";
 import { getAllPosts } from "@/lib/writing";
 
+const writingDescription =
+  "Notes on building production LLM systems — LLM evaluation, RAG architecture, prompt engineering at scale, and provider benchmarking. Drawn from work at Upheal and on Lexomat.";
+
 export const metadata: Metadata = {
   title: "Writing",
-  description:
-    "Notes on building production LLM systems, AI evaluations, and lessons from shipping Lexomat and Souli.",
+  description: writingDescription,
   alternates: { canonical: "/writing" },
+  openGraph: {
+    type: "website",
+    url: "/writing",
+    title: "Writing — Maroš Jančo",
+    description: writingDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Writing — Maroš Jančo",
+    description: writingDescription,
+  },
 };
 
 export default function WritingIndex() {
@@ -19,10 +32,22 @@ export default function WritingIndex() {
         Writing
       </h1>
       {posts.length === 0 ? (
-        <p className="mt-8 max-w-[640px] text-[17px] italic text-muted">
-          Coming soon: notes on building production LLM systems, AI evaluations,
-          and lessons from shipping Lexomat and Souli.
-        </p>
+        <div className="mt-8 max-w-[640px] space-y-4 text-[17px] leading-[1.6] text-muted">
+          <p>
+            Notes on building production LLM systems, primarily drawn from work
+            at Upheal and on Lexomat. Topics include LLM evaluation, RAG
+            architecture, prompt engineering at scale, provider benchmarking,
+            and the engineering trade-offs that don&rsquo;t show up in the LLM
+            marketing literature.
+          </p>
+          <p>
+            First post coming June 2026.{" "}
+            <a href="/feed.xml" className="text-accent hover:opacity-70">
+              Subscribe via RSS
+            </a>{" "}
+            to be notified.
+          </p>
+        </div>
       ) : (
         <ul className="mt-12 flex flex-col divide-y divide-subtle">
           {posts.map((p) => (

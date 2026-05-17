@@ -10,17 +10,22 @@ export function OpenSource() {
         <article className="rounded-lg border border-subtle p-7 md:p-9">
           <h3 className="text-[20px] font-semibold md:text-[22px]">
             Souli
-            <span className="ml-2 font-normal text-muted">· open-source</span>{" "}
-            <span className="text-muted">· </span>
-            <a
-              href={site.links.souli}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:opacity-70"
-            >
-              github.com/dzino-app/souli.app →
-            </a>
+            <span className="font-normal text-muted">
+              {" · "}open-source{" · "}
+              <a
+                href={site.links.souli}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:opacity-70"
+              >
+                github.com/dzino-app/souli.app →
+              </a>
+            </span>
           </h3>
+          <p className="mt-3 text-[17px] italic md:text-[18px]">
+            How do you build a useful AI companion without sending plaintext
+            chat to a third-party model?
+          </p>
           <p className="mt-4 text-[17px] leading-[1.6]">
             End-to-end encrypted AI companion that gamifies personal growth
             across social, health, career and personal aspects. Privacy-first

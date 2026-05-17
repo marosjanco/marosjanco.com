@@ -34,8 +34,8 @@ const columns = [
     title: "Working style",
     body: (
       <p>
-        Remote-first from Slovakia with regular travel — comfortable with hybrid
-        roles across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich,
+        Remote-first from Slovakia with regular travel — comfortable working
+        hybrid across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich,
         Prague, Vienna) on a roughly monthly cadence. Async-friendly, English,
         EU/UK timezones.
       </p>

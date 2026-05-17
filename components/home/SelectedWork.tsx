@@ -19,7 +19,7 @@ const cases: CaseStudy[] = [
     question:
       "How do you ship LLM products that don't regress in production, across 100+ releases?",
     headline:
-      "Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of a Best-Startup-Award-winning AI documentation platform for therapists.",
+      "Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of an AI clinical-documentation platform for therapists (Best Startup Award winner).",
     detail:
       "Owned quality and shipped 100+ production releases. Built an LLM-as-judge eval framework on Langfuse with datasets, eval runs and trace-level debugging. Productionised RAG, prompt orchestration and agentic patterns across Gemini, Claude, GPT-* and Llama; benchmarked Vertex AI, Bedrock, Azure OpenAI and Anthropic for quality, latency and cost. Automated a Claude-Agent-SDK customer-support agent. Reported AI roadmap and cost trade-offs directly to founders.",
     stack:
@@ -74,21 +74,23 @@ export function SelectedWork() {
             >
               <h3 className="text-[20px] font-semibold md:text-[22px]">
                 {c.company}
-                <span className="ml-2 font-normal text-muted">· {c.meta}</span>
-                {c.link && (
-                  <>
-                    {" "}
-                    <span className="text-muted">· </span>
-                    <a
-                      href={c.link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-accent hover:opacity-70"
-                    >
-                      {c.link.label}
-                    </a>
-                  </>
-                )}
+                <span className="font-normal text-muted">
+                  {" · "}
+                  {c.meta}
+                  {c.link && (
+                    <>
+                      {" · "}
+                      <a
+                        href={c.link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent hover:opacity-70"
+                      >
+                        {c.link.label}
+                      </a>
+                    </>
+                  )}
+                </span>
               </h3>
               <p className="mt-3 text-[17px] italic md:text-[18px]">
                 {c.question}
