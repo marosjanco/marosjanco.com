@@ -335,7 +335,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 >
 > I'm a generalist by preference — I want to own a problem from prompt to production, not specialise into one layer of the stack. The kind of work I do best is the messy middle: making a demo-grade AI system into something that ships, scales, costs less than it earns, and doesn't break in surprising ways.
 >
-> Outside work I'm building a family home in Nolčovo (northern Slovakia), raising young children, and reading too much about energy markets and language models. I speak English, Slovak, Czech and beginner German.
+> Outside work I read daily about investing, economics, agentic systems, and AI advancements. I speak English, Slovak, Czech and beginner German.
 
 **Resolved:** Photo is **included and provided**. The source headshot is committed at `assets/portrait-2021-source.jpg` — 7952×5304, colour, warm natural light, head-and-shoulders, plain warm wall (already on-brief; pairs well with the `#FAFAF7` background). Build session: optimise it into `/public/portrait.avif`, `.webp`, `.jpg` at a ~4:5 or 1:1 crop centred on the face, display weight ≤ ~80KB (see §6.4), served via `next/image` with explicit dimensions (no layout shift). Keep the graceful-degrade fallback (right column takes full width if the asset is ever absent) as defensive code. No B&W treatment — use it in colour as shot.
 

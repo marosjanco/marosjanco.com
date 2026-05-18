@@ -60,10 +60,9 @@ export function About() {
               than it earns, and doesn&rsquo;t break in surprising ways.
             </p>
             <p>
-              Outside work I&rsquo;m building a family home in Nolčovo (northern
-              Slovakia), raising young children, and reading too much about
-              energy markets and language models. I speak English, Slovak, Czech
-              and beginner German.
+              Outside work I read daily about investing, economics, agentic
+              systems, and AI advancements. I speak English, Slovak, Czech and
+              beginner German.
             </p>
           </div>
         </div>
