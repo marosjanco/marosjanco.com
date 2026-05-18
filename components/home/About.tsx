@@ -47,10 +47,11 @@ export function About() {
             <p>
               Alongside employment I&rsquo;ve founded two AI products: Lexomat, a
               legal-research chat used by lawyers across Slovakia and Czechia,
-              and Souli, an open-source end-to-end-encrypted AI companion. The
-              combination of senior IC engineering, founder experience, and
-              direct customer-facing product work is what I bring to
-              engagements.
+              and Souli, an open-source end-to-end-encrypted AI companion.
+              Earlier, in 2019, I co-founded PayToEat, a food-delivery app still
+              used by customers today. The combination of senior IC engineering,
+              founder experience, and direct customer-facing product work is what
+              I bring to engagements.
             </p>
             <p>
               I&rsquo;m a generalist by preference — I want to own a problem from

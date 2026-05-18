@@ -331,7 +331,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > I'm a senior AI engineer with 9+ years shipping production ML, NLP and LLM systems. I trained at Imperial College London (BSc Mathematics with Statistics for Finance, First Class) and UCL (MSc Machine Learning), then spent four years at BNP Paribas's AI lab, two years at Cervest in climate-risk modelling, and the last two and a half years leading AI engineering at Upheal.
 >
-> Alongside employment I've founded two AI products: Lexomat, a legal-research chat used by lawyers across Slovakia and Czechia, and Souli, an open-source end-to-end-encrypted AI companion. The combination of senior IC engineering, founder experience, and direct customer-facing product work is what I bring to engagements.
+> Alongside employment I've founded two AI products: Lexomat, a legal-research chat used by lawyers across Slovakia and Czechia, and Souli, an open-source end-to-end-encrypted AI companion. Earlier, in 2019, I co-founded PayToEat, a food-delivery app still used by customers today. The combination of senior IC engineering, founder experience, and direct customer-facing product work is what I bring to engagements.
 >
 > I'm a generalist by preference — I want to own a problem from prompt to production, not specialise into one layer of the stack. The kind of work I do best is the messy middle: making a demo-grade AI system into something that ships, scales, costs less than it earns, and doesn't break in surprising ways.
 >
