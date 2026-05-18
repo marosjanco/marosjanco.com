@@ -10,8 +10,8 @@ export function Hero() {
             Senior AI engineer for production LLM systems.
           </h1>
           <p className="mt-7 max-w-[600px] text-[17px] leading-[1.5] text-muted md:text-[21px]">
-            I help founders and engineering teams ship LLM, RAG and agentic
-            systems that actually work in production — evaluations, prompt
+            I help founders and engineering teams ship agentic, RAG and LLM
+            systems that actually work in production — evaluations, context
             engineering, MLOps, full-stack.
           </p>
           <p className="mt-4 max-w-[600px] text-[17px] leading-[1.5] text-muted md:text-[21px]">

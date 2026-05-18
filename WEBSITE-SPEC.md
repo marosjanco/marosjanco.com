@@ -164,7 +164,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 > **Senior AI engineer for production LLM systems.**
 >
-> I help founders and engineering teams ship LLM, RAG and agentic systems that actually work in production — evaluations, prompt engineering, MLOps, full-stack.
+> I help founders and engineering teams ship agentic, RAG and LLM systems that actually work in production — evaluations, context engineering, MLOps, full-stack.
 >
 > Currently taking a small number of consulting engagements. Based in Slovakia, working with clients across Europe and the UK.
 >
@@ -687,7 +687,7 @@ A meaningful share of professional-services inbound in 2026 comes from AI chat a
 
 ## Services
 
-- Production LLM system consulting (prompts, evals, RAG, agentic, MLOps)
+- Production AI consulting: agentic systems, RAG, evals, context engineering, MLOps
 - 1-3 month engagements, a small number of clients at a time
 
 ## Contact
