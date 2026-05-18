@@ -19,11 +19,11 @@ const cases: CaseStudy[] = [
     question:
       "How do you ship LLM products that don't regress in production, across 100+ releases?",
     headline:
-      "Led prompt engineering, evaluation and agentic systems for AI-generated clinical progress notes — the core product of an AI clinical-documentation platform for therapists (Best Startup Award winner).",
+      "Led prompts, models and quality for AI-generated clinical progress notes — the core product of an AI documentation platform for therapists (Best Startup Award winner).",
     detail:
-      "Owned quality and shipped 100+ production releases. Built an LLM-as-judge eval framework on Langfuse with datasets, eval runs and trace-level debugging. Productionised RAG, prompt orchestration and agentic patterns across Gemini, Claude, GPT-* and Llama; benchmarked Vertex AI, Bedrock, Azure OpenAI and Anthropic for quality, latency and cost. Automated a Claude-Agent-SDK customer-support agent. Reported AI roadmap and cost trade-offs directly to founders.",
+      "Shipped 100+ production releases. Built an LLM-as-judge evaluation framework on Langfuse (datasets, eval runs, trace-level flow debugging) plus an A/B-testing pipeline that gates releases. Productionised RAG, prompt orchestration and agentic patterns across Gemini, Claude, GPT-* and Llama; benchmarked Vertex AI, AWS Bedrock, Azure OpenAI and Anthropic for quality, latency and cost. Automated a Claude-Agent-SDK customer-support agent with internal-tool integration and guardrails. Ran LLM observability and MLOps, and reported AI projects and cost trade-offs directly to founders.",
     stack:
-      "Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack",
+      "Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack · CloudWatch",
   },
   {
     company: "Cervest",
