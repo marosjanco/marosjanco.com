@@ -8,7 +8,7 @@ type CaseStudy = {
   link?: { label: string; href: string };
   question: string;
   headline: string;
-  detail: string;
+  detail: string | string[];
   stack: string;
 };
 
@@ -17,13 +17,18 @@ const cases: CaseStudy[] = [
     company: "Upheal",
     meta: "Senior AI Engineer (Contract) · Nov 2023 – May 2026",
     question:
-      "How do you ship LLM products that don't regress in production, across 100+ releases?",
+      "How do you ship LLM products that don't regress in production, across 100+ releases and multiple model generations?",
     headline:
-      "Led prompts, models and quality for AI-generated clinical progress notes — the core product of an AI documentation platform for therapists (Best Startup Award winner).",
-    detail:
-      "Shipped 100+ production releases. Built an LLM-as-judge evaluation framework on Langfuse (datasets, eval runs, trace-level flow debugging) plus an A/B-testing pipeline that gates releases. Productionised RAG, prompt orchestration and agentic patterns across Gemini, Claude, GPT-* and Llama; benchmarked Vertex AI, AWS Bedrock, Azure OpenAI and Anthropic for quality, latency and cost. Automated a Claude-Agent-SDK customer-support agent with internal-tool integration and guardrails. Ran LLM observability and MLOps, and reported AI projects and cost trade-offs directly to founders.",
+      "Owned prompts, models and quality for AI-generated clinical progress notes — the core product of a Best-Startup-Award-winning documentation platform for therapists.",
+    detail: [
+      "Quality mattered across 250+ documentation sections: dozens of prompt flows, RAG where retrieval helped, agentic patterns where multi-step reasoning was needed, and a family of AI text-editing tools for clinicians.",
+      "Shipped 100+ production releases without quality regression across multiple model deprecations and new arrivals (Gemini, Claude, GPT-*, Llama).",
+      "Built an LLM-as-judge evaluation framework on Langfuse (datasets, eval runs, trace-level flow debugging), plus an A/B-testing pipeline that gated every release.",
+      "Benchmarked Vertex AI, AWS Bedrock, Azure OpenAI and Anthropic continuously for quality, latency and cost; chose providers per use case rather than committing to one.",
+      "Automated a Claude-Agent-SDK customer-support agent with an interactive knowledge-base layer and production guardrails; ran LLM observability and MLOps; reported AI roadmap and cost trade-offs directly to founders.",
+    ],
     stack:
-      "Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack · CloudWatch",
+      "Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack",
   },
   {
     company: "Cervest",
@@ -96,9 +101,17 @@ export function SelectedWork() {
                 {c.question}
               </p>
               <p className="mt-3 text-[17px] leading-[1.6]">{c.headline}</p>
-              <p className="mt-3 text-[16px] leading-[1.6] text-muted">
-                {c.detail}
-              </p>
+              {Array.isArray(c.detail) ? (
+                <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[16px] leading-[1.6] text-muted">
+                  {c.detail.map((d, j) => (
+                    <li key={j}>{d}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-[16px] leading-[1.6] text-muted">
+                  {c.detail}
+                </p>
+              )}
               <p className="mt-4 font-mono text-[13px] text-muted">{c.stack}</p>
             </article>
           ))}
