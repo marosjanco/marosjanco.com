@@ -213,11 +213,11 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 >
 > - Quality mattered across 250+ documentation sections: dozens of prompt flows, RAG where retrieval helped, agentic patterns where multi-step reasoning was needed, and a family of AI text-editing tools for clinicians.
 > - Shipped 100+ production releases without quality regression across multiple model deprecations and new arrivals (Gemini, Claude, GPT-*, Llama).
-> - Built an LLM-as-judge evaluation framework on Langfuse (datasets, eval runs, trace-level flow debugging), plus an A/B-testing pipeline that gated every release.
-> - Benchmarked Vertex AI, AWS Bedrock, Azure OpenAI and Anthropic continuously for quality, latency and cost; chose providers per use case rather than committing to one.
-> - Automated a Claude-Agent-SDK customer-support agent with an interactive knowledge-base layer and production guardrails; ran LLM observability and MLOps; reported AI roadmap and cost trade-offs directly to founders.
+> - Cut AI cost ~50% with no quality regression — backed by an LLM-as-judge evaluation framework on Langfuse (datasets, eval runs, trace-level flow debugging) and an A/B-testing pipeline that gated releases, caught regressions and shortened prompt iteration.
+> - Benchmarked Vertex AI, AWS Bedrock, Azure OpenAI and Anthropic continuously for quality, latency and cost; routed traffic by use case rather than committing to one provider.
+> - Automated a Claude-Agent-SDK customer-support agent (internal-tool integration, hardened prompts, guardrails). Ran LLM observability and MLOps; reported AI roadmap and cost trade-offs directly to founders, and lifted team velocity — Claude Code in daily workflow, CI/CD, internal RAG/prompting/agentic sessions.
 >
-> Stack: Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack
+> Stack: Python · TypeScript · Langfuse · Vertex AI · Bedrock · Anthropic API · Grafana · BetterStack · CloudWatch · SNS · SQS · Superset
 >
 > Note: `<CaseStudy>` `detail` accepts a string (paragraph) or string[] (bulleted list). Upheal uses bullets; the other three remain single-paragraph by default.
 
