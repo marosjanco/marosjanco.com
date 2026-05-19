@@ -9,7 +9,7 @@ export const site = {
   // Capacity signal — review this monthly; it must stay true (spec trust signal).
   capacity: "Currently available for new engagements.",
   links: {
-    linkedin: "https://www.linkedin.com/in/maro%C5%A1-jan%C4%8Do-565a3535/",
+    linkedin: "https://www.linkedin.com/in/marosjanco",
     github: "https://github.com/marosjanco",
     souli: "https://github.com/dzino-app/souli.app",
     lexomat: "https://lexomat.sk",

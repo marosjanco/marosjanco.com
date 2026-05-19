@@ -44,6 +44,7 @@ The site is **built and live** (Next.js 15, Vercel git-connected to `master`, cu
 - **`/writing`** has a substantive placeholder + its own OG metadata; blog uses MDX with a `draft:` flag (drafts excluded from listings/sitemap/RSS and 404 in production; render only on local dev).
 - **Trust bar / favicons / cv.pdf** v1 deviations from §3.2/§9 still stand (text wordmarks, migrated favicons, HTML `/cv` only).
 - **Blog content rule:** posts are written generally — no Upheal / employer-experience framing (confidentiality). Lexomat (own product) is fine in depth.
+- **CV sync (v1.4):** site aligned to the maintained PDF CV — Upheal "Nov 2023 – Present" (not "May 2026"/"Contract"), BNP "Jun 2016", Cervest "Jun 2021 – Jun 2023"; `/cv` adds ATEN Consult + a Side Projects block (Lexomat, Souli, PayToEat); LinkedIn vanity `linkedin.com/in/marosjanco` everywhere; real `public/cv.pdf` shipped with a Download link on `/cv`. Homepage Selected Work stays the 4 marquee (ATEN/PayToEat live on `/cv` only).
 
 ---
 
@@ -141,7 +142,7 @@ Minimal. Single row on desktop, stacked on mobile.
 © 2026 Maroš Jančo                LinkedIn · GitHub · Email · RSS
 ```
 
-- LinkedIn → `https://www.linkedin.com/in/maro%C5%A1-jan%C4%8Do-565a3535/` (Maroš's existing profile). **Pre-launch:** if Maroš sets a clean vanity URL (`linkedin.com/in/marosjanco`), use that instead and update §7.5 to match.
+- LinkedIn → `https://www.linkedin.com/in/marosjanco` (clean vanity URL — confirmed live, in use across footer + JSON-LD + /cv).
 - GitHub → `https://github.com/marosjanco` (personal profile, not an org — see §3.4 note)
 - Email → `mailto:` per §5.5
 - RSS → `/feed.xml`
@@ -205,7 +206,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 **Case Study 1: Upheal**
 
-> **Upheal** · Senior AI Engineer (Contract) · Nov 2023 – May 2026
+> **Upheal** · Senior AI Engineer · Nov 2023 – Present
 >
 > *How do you ship LLM products that don't regress in production, across 100+ releases and multiple model generations?*
 >
@@ -223,7 +224,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 **Case Study 2: Cervest**
 
-> **Cervest** · Senior Data Scientist · Jul 2021 – Jul 2023
+> **Cervest** · Senior Data Scientist · Jun 2021 – Jun 2023
 >
 > *How do you ship production ML over TBs of multi-source data, where the predictions bear real financial risk?*
 >
@@ -235,7 +236,7 @@ The homepage is one long scroll. Section order, names, and copy are below. Each 
 
 **Case Study 3: BNP Paribas**
 
-> **BNP Paribas** · Machine Learning Researcher · Jun 2017 – Jun 2021
+> **BNP Paribas** · Machine Learning Researcher · Jun 2016 – Jun 2021
 >
 > *How do you ship NLP models that run daily in mission-critical workflows, year after year?*
 >
@@ -662,7 +663,7 @@ Homepage `<head>`:
   "url": "https://marosjanco.com",
   "jobTitle": "Senior AI Engineer",
   "sameAs": [
-    "https://www.linkedin.com/in/maro%C5%A1-jan%C4%8Do-565a3535/",
+    "https://www.linkedin.com/in/marosjanco",
     "https://github.com/marosjanco"
   ],
   "alumniOf": [
@@ -672,7 +673,7 @@ Homepage `<head>`:
 }
 ```
 
-If Maroš creates a clean LinkedIn vanity URL before launch, replace the `sameAs` LinkedIn entry with `https://www.linkedin.com/in/marosjanco` and keep §2.3 in sync.
+LinkedIn vanity URL `https://www.linkedin.com/in/marosjanco` is confirmed and used in `sameAs`, the footer (§2.3), and `/cv` — all in sync.
 
 ### 7.6 LLM-search visibility
 
@@ -687,7 +688,7 @@ A meaningful share of professional-services inbound in 2026 comes from AI chat a
 ## Background
 
 - 9+ years shipping ML, NLP and LLM systems
-- Ex-Upheal (Senior AI Engineer, 2023-2026), Cervest (Senior Data Scientist, 2021-2023), BNP Paribas (ML Researcher, 2017-2021)
+- Upheal (Senior AI Engineer, 2023-present), Cervest (Senior Data Scientist, 2021-2023), BNP Paribas (ML Researcher, 2016-2021)
 - MSc Machine Learning, UCL; BSc Mathematics, Imperial College London
 - Founder of Lexomat (lexomat.sk), AI legal-research for Slovak/Czech law
 

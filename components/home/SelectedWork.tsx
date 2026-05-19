@@ -15,7 +15,7 @@ type CaseStudy = {
 const cases: CaseStudy[] = [
   {
     company: "Upheal",
-    meta: "Senior AI Engineer (Contract) · Nov 2023 – May 2026",
+    meta: "Senior AI Engineer · Nov 2023 – Present",
     question:
       "How do you ship LLM products that don't regress in production, across 100+ releases and multiple model generations?",
     headline:
@@ -32,7 +32,7 @@ const cases: CaseStudy[] = [
   },
   {
     company: "Cervest",
-    meta: "Senior Data Scientist · Jul 2021 – Jul 2023",
+    meta: "Senior Data Scientist · Jun 2021 – Jun 2023",
     question:
       "How do you ship production ML over TBs of multi-source data, where the predictions bear real financial risk?",
     headline:
@@ -43,7 +43,7 @@ const cases: CaseStudy[] = [
   },
   {
     company: "BNP Paribas",
-    meta: "Machine Learning Researcher · Jun 2017 – Jun 2021",
+    meta: "Machine Learning Researcher · Jun 2016 – Jun 2021",
     question:
       "How do you ship NLP models that run daily in mission-critical workflows, year after year?",
     headline: "Built and deployed NLP models for a global investment bank's AI lab.",

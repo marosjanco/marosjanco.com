@@ -6,7 +6,7 @@
 ## Background
 
 - 9+ years shipping ML, NLP and LLM systems
-- Ex-Upheal (Senior AI Engineer, 2023-2026), Cervest (Senior Data Scientist, 2021-2023), BNP Paribas (ML Researcher, 2017-2021)
+- Upheal (Senior AI Engineer, 2023-present), Cervest (Senior Data Scientist, 2021-2023), BNP Paribas (ML Researcher, 2016-2021)
 - MSc Machine Learning, UCL; BSc Mathematics, Imperial College London
 - Founder of Lexomat (lexomat.sk), AI legal-research for Slovak/Czech law
 
