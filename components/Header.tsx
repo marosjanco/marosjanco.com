@@ -37,6 +37,13 @@ export function Header() {
           <Link href="/cv" className="transition-colors hover:text-accent">
             CV
           </Link>
+          <Link
+            href="/sk"
+            lang="sk"
+            className="transition-colors hover:text-accent"
+          >
+            SK
+          </Link>
           <a
             href={mailtoHref}
             className="text-accent transition-opacity hover:opacity-70"
