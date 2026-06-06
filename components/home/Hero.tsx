@@ -1,4 +1,4 @@
-import { site, mailtoHref } from "@/lib/site";
+import { site, mailtoHref, bookingHref } from "@/lib/site";
 import { Container } from "@/components/Container";
 
 export function Hero() {
@@ -27,16 +27,24 @@ export function Hero() {
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 text-[16px]">
             <a
+              href={bookingHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border-b border-accent pb-0.5 text-accent transition-opacity hover:opacity-70"
+            >
+              Book a free 30-min call →
+            </a>
+            <a
+              href={mailtoHref}
+              className="border-b border-fg pb-0.5 transition-colors hover:border-accent hover:text-accent"
+            >
+              Email me →
+            </a>
+            <a
               href="#work"
               className="border-b border-fg pb-0.5 transition-colors hover:border-accent hover:text-accent"
             >
               See recent work ↓
-            </a>
-            <a
-              href={mailtoHref}
-              className="border-b border-accent pb-0.5 text-accent transition-opacity hover:opacity-70"
-            >
-              Email me →
             </a>
           </div>
         </div>

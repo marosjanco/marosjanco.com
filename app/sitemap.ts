@@ -18,6 +18,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.6,
     },
+    {
+      url: `${site.url}/sk`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
   ];
   const posts: MetadataRoute.Sitemap = getAllPosts().map((p) => ({
     url: `${site.url}/writing/${p.slug}`,

@@ -13,8 +13,14 @@ export const site = {
     github: "https://github.com/marosjanco",
     souli: "https://github.com/dzino-app/souli.app",
     lexomat: "https://lexomat.sk",
+    // Free 30-min intro call (Calendly). This single value flows to every
+    // "Book a call" CTA on the site.
+    booking: "https://calendly.com/marosjanco/ai-consultation",
   },
 } as const;
+
+// One place for the booking URL so every CTA stays in sync.
+export const bookingHref = site.links.booking;
 
 // Pre-filled mailto — a small but disproportionately effective conversion lever (spec §5.5).
 export const mailtoHref =
