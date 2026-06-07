@@ -3,7 +3,7 @@ import { Container } from "@/components/Container";
 import { site } from "@/lib/site";
 
 const cvDescription =
-  "Curriculum vitae of Maroš Jančo — senior AI/ML engineer. 9+ years shipping production ML, NLP and LLM systems. Ex-Upheal, Cervest, BNP Paribas; founder of Lexomat.";
+  "Curriculum vitae of Maroš Jančo — senior AI/ML engineer. 10+ years shipping production ML, NLP and LLM systems. Ex-Upheal, Cervest, BNP Paribas; founder of Lexomat.";
 
 export const metadata: Metadata = {
   title: "CV",
@@ -120,7 +120,7 @@ export default function CvPage() {
       <section className="mt-12">
         <h2 className="font-serif text-[24px] font-semibold">Summary</h2>
         <p className="mt-4 max-w-[760px] text-[17px] leading-[1.6]">
-          Generalist AI engineer with 9+ years shipping applied ML, NLP and LLM
+          Generalist AI engineer with 10+ years shipping applied ML, NLP and LLM
           products end-to-end — currently leading prompts, evals, RAG and
           agentic systems at Upheal. Trained at Imperial College London (BSc
           Mathematics with Statistics for Finance, First Class) and UCL (MSc

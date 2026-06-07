@@ -25,12 +25,14 @@ export function About() {
           {hasPortrait && <Portrait />}
           <div className="space-y-5 text-[17px] leading-[1.6]">
             <p>
-              I&rsquo;m a senior AI engineer with 9+ years shipping production
+              I&rsquo;m a senior AI engineer with 10+ years shipping production
               ML, NLP and LLM systems. I trained at Imperial College London (BSc
               Mathematics with Statistics for Finance, First Class) and UCL (MSc
-              Machine Learning), then spent four years at BNP Paribas&rsquo;s AI
-              lab, two years at Cervest in climate-risk modelling, and the last
-              two and a half years leading AI engineering at Upheal.
+              Machine Learning) — taught in part by faculty from Google DeepMind
+              — then spent four years automating a global bank&rsquo;s services
+              with AI at BNP Paribas, two years at Cervest in climate-risk
+              modelling, and the last two and a half years leading AI engineering
+              at Upheal.
             </p>
             <p>
               Alongside employment I&rsquo;ve founded two AI products: Lexomat, a

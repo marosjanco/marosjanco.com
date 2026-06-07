@@ -167,11 +167,11 @@ export default function SkPage() {
         <Container width="reading">
           <SectionHeading>Prečo ja</SectionHeading>
           <p className="text-[17px] leading-[1.7]">
-            Senior AI inžinier s reálnymi produkčnými systémami — nie
-            prezentácie, ale fungujúci softvér. Vzdelanie: Imperial College
-            London (BSc Matematika) a UCL (MSc Machine Learning). V Upheal som
-            viedol AI tím a znížil prevádzkové náklady o ~50 %; popri tom som
-            založil{" "}
+            Senior AI inžinier s viac než 10 rokmi v AI — nie prezentácie, ale
+            fungujúci softvér. Vyštudoval som Imperial College London a UCL
+            (profesori z Google DeepMind), 4 roky som v banke BNP Paribas
+            automatizoval služby pomocou AI, v Upheal som znížil prevádzkové
+            náklady o ~50 % a založil som{" "}
             <a
               href={site.links.lexomat}
               target="_blank"
@@ -180,9 +180,9 @@ export default function SkPage() {
             >
               Lexomat
             </a>
-            , AI asistenta pre slovenské a české právo. Pracujem v malom tíme
-            troch inžinierov, ktorý riadim interne — vy sa rozprávate priamo so
-            mnou.
+            , AI asistenta pre slovenské a české právo. Väčšie projekty
+            realizujem s malým tímom preverených senior inžinierov pod mojím
+            vedením — vy sa rozprávate priamo so mnou.
           </p>
         </Container>
       </Section>
