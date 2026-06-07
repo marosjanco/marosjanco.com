@@ -43,21 +43,29 @@ const sluzby = [
   },
 ];
 
-const kroky = [
+// Mirrors the English "How I Work" section (Engagements / Pricing / Working
+// style) — keep both languages aligned when either changes.
+const spolupraca = [
   {
-    n: "1",
-    title: "30 minút zadarmo",
-    body: "Nezáväzne. Poviete mi, kde vás to najviac tlačí.",
+    title: "Spolupráca",
+    body: [
+      "Každá spolupráca začína nezáväzným hovorom zadarmo. Spolu si prejdeme, ako vaša firma reálne funguje — vaše každodenné procesy, kde sa stráca čas, čo sa ešte robí ručne — a ja vám úprimne poviem, čo sa oplatí automatizovať či zlepšiť a čo nie.",
+      "Odtiaľ viem postaviť niečo nové, alebo to, čo už máte, spraviť rýchlejším, lacnejším a spoľahlivejším — zlepšujem aj existujúce automatizácie a infraštruktúru, nielen riešenia na zelenej lúke.",
+      "Typicky 1–3 mesiace, podľa konkrétneho problému. Naraz beriem len pár klientov.",
+    ],
   },
   {
-    n: "2",
-    title: "Návrh na mieste",
-    body: "Čo sa dá riešiť AI, ako a približne za koľko.",
+    title: "Cena",
+    body: [
+      "Prvý hovor je zadarmo a nezáväzne. Keď si spolu zadefinujeme problém, do 24 hodín pošlem jasné cenové rozpätie — fixná cena pri jasne ohraničených projektoch, alebo denná sadzba pri priebežnej a prieskumnej práci.",
+      "Každú spoluprácu vediem a realizujem osobne (senior Python / full-stack) a pri väčšom rozsahu alebo potrebe špecialistu priberám ďalších preverených senior inžinierov pod mojím vedením — malý senior tím bez réžie a vrstiev veľkých konzultačných firiem. Vždy komunikujete priamo so mnou.",
+    ],
   },
   {
-    n: "3",
-    title: "Ak to dáva zmysel, postavíme to",
-    body: "Typicky projekt na 1–3 mesiace, cena za projekt alebo denná sadzba.",
+    title: "Spôsob práce",
+    body: [
+      "Som zo Slovenska a osobné stretnutia mám naozaj rád. Ak to spolupráca vyžaduje, pricestujem kamkoľvek na svete — pravidelne osobne vo veľkých mestách ako Londýn, Berlín, Mníchov, Amsterdam, Zürich, Praha či Viedeň, a aj ďalej, kamkoľvek nás práca zavedie. Medzi stretnutiami som responzívny a async-friendly, pracujem po slovensky aj anglicky naprieč časovými pásmami.",
+    ],
   },
 ];
 
@@ -127,22 +135,19 @@ export default function SkPage() {
         </Container>
       </Section>
 
-      {/* Ako to funguje */}
+      {/* Ako pracujem (mirrors EN "How I Work") */}
       <Section id="ako" divider>
         <Container width="full">
-          <SectionHeading>Ako to funguje</SectionHeading>
-          <div className="grid gap-10 md:grid-cols-3 md:gap-8">
-            {kroky.map((k) => (
-              <div key={k.n}>
-                <span className="font-serif text-[28px] font-semibold text-accent">
-                  {k.n}
-                </span>
-                <h3 className="mt-2 font-serif text-[19px] font-semibold tracking-[-0.01em]">
-                  {k.title}
-                </h3>
-                <p className="mt-3 text-[16px] leading-[1.6] text-muted">
-                  {k.body}
-                </p>
+          <SectionHeading>Ako pracujem</SectionHeading>
+          <div className="grid gap-12 md:grid-cols-3 md:gap-16">
+            {spolupraca.map((col) => (
+              <div key={col.title}>
+                <h3 className="mb-3 text-[18px] font-semibold">{col.title}</h3>
+                <div className="space-y-3 text-[16px] leading-[1.6] text-muted">
+                  {col.body.map((para, i) => (
+                    <p key={i}>{para}</p>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

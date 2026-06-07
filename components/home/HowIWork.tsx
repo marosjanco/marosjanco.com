@@ -51,12 +51,12 @@ const columns = [
     title: "Working style",
     body: (
       <p>
-        I&rsquo;m based in Slovakia and genuinely enjoy meeting in person —
-        happy to come to you anywhere in Slovakia, and to work on-site or hybrid
-        across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich, Prague,
-        Vienna) as often as a project benefits from it. Between visits
-        I&rsquo;m responsive and async-friendly, working in Slovak and English
-        across EU/UK timezones.
+        I&rsquo;m based in Slovakia and genuinely love meeting in person. When
+        an engagement calls for it I&rsquo;ll travel anywhere in the world —
+        regularly on-site across major hubs like London, Berlin, Munich,
+        Amsterdam, Zurich, Prague and Vienna, and further afield wherever the
+        work takes us. Between visits I&rsquo;m responsive and async-friendly,
+        working in Slovak and English across time zones.
       </p>
     ),
   },
