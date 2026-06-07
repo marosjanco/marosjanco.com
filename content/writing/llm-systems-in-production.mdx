@@ -8,7 +8,7 @@ draft: false
 
 A demo answers one question: can this produce a good output once. Production asks a different one: does it produce good outputs *at scale, every time, fast enough, cheaply enough, and predictably* — while the world underneath it (traffic, models, data) keeps moving. The gap between those two questions is where most LLM and agent projects quietly stall.
 
-What makes it hard is that "production-ready" is not one property. It is several that have to hold *at the same time*, and they trade off against each other. The skill I bring is looking at all of them at once — because optimising any one in isolation usually breaks another.
+What makes it hard is that "production-ready" is not one property. It is several that have to hold *at the same time*, and they trade off against each other — so optimising any one in isolation usually breaks another. Holding the whole set in view at once is the actual discipline, and the thing I'm most often brought in to do.
 
 ## The aspects that have to hold at once
 
@@ -49,7 +49,7 @@ Most of these make the system *better and cheaper and more stable at once*, whic
 
 **Upheal** — leading AI there, I brought model-running costs down by roughly **50%** without a quality regression. The reason it was safe to do was the evaluation framework underneath it: every change was gated against measured quality, so cost came out of the system without anyone discovering the loss later.
 
-**Lexomat** — my own legal-research product, where the failure mode that matters most is a confident, wrong citation. Two things guard against it. First, references are **structurally checked against the corpus**: a cited source has to actually exist and be relevant, or it is dropped or softened rather than shown as authority — so the system does not hallucinate references, it grounds them. Second, a **temporal guard**: a legal answer depends on which version of a law was in force at the relevant time, so the system checks cited versions against their effective dates *deterministically* and only asks a model to judge the remaining semantic question. For a legal — or any data-sensitive — product, that kind of robustness is not a nice-to-have; it is the feature.
+**Lexomat** — my own legal-research product, where the failure mode that matters most is a confident, wrong citation. Two things guard against it. First, references are **structurally checked against the corpus**: a cited source has to actually exist and be relevant, or it is dropped or softened rather than shown as authority. The system grounds references instead of inventing them. Second, a **temporal guard**: a legal answer depends on which version of a law was in force at the relevant time, so the system checks cited versions against their effective dates *deterministically* and only asks a model to judge the remaining semantic question. For a legal — or any data-sensitive — product, that kind of robustness is not a nice-to-have; it is the feature.
 
 ## How I work on this
 
