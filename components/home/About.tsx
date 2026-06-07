@@ -28,8 +28,8 @@ export function About() {
               I&rsquo;m a senior AI engineer with 10+ years shipping production
               ML, NLP and LLM systems. I trained at Imperial College London (BSc
               Mathematics with Statistics for Finance, First Class) and UCL (MSc
-              Machine Learning) — taught in part by faculty from Google DeepMind
-              — then spent four years automating a global bank&rsquo;s services
+              Machine Learning), taught by Google DeepMind professors, then
+              spent four years automating a global bank&rsquo;s services
               with AI at BNP Paribas, two years at Cervest in climate-risk
               modelling, and the last two and a half years leading AI engineering
               at Upheal.

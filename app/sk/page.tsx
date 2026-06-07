@@ -169,7 +169,7 @@ export default function SkPage() {
           <p className="text-[17px] leading-[1.7]">
             Senior AI inžinier s viac než 10 rokmi v AI — nie prezentácie, ale
             fungujúci softvér. Vyštudoval som Imperial College London a UCL
-            (profesori z Google DeepMind), 4 roky som v banke BNP Paribas
+            s Google DeepMind profesormi, 4 roky som v banke BNP Paribas
             automatizoval služby pomocou AI, v Upheal som znížil prevádzkové
             náklady o ~50 % a založil som{" "}
             <a
