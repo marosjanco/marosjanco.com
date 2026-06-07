@@ -1,7 +1,7 @@
 ---
 title: "What 'in production' really asks of an LLM system"
 date: "2026-06-07"
-summary: "A production LLM or agent system succeeds only when quality, latency, cost, feedback and fallback hold at once — and aligned with the product. That alignment is also where the big, safe wins hide: sometimes a single model swap is ~50% cheaper, if you can prove quality didn't move."
+summary: "A production LLM or agent system succeeds only when quality, latency, cost, feedback and fallback hold at once — and aligned with the product. That alignment is also where the big, safe wins hide: sometimes a single model swap is far cheaper for the same quality, if you can prove the quality didn't move."
 tags: ["production", "llm", "agentic", "cost", "rag", "evaluation"]
 draft: false
 ---
@@ -27,7 +27,7 @@ None of these is optional, and you cannot tune them one at a time. Faster can me
 
 Here is the part teams underestimate. Once the whole picture is instrumented, large, safe wins appear that look almost too easy.
 
-The clearest example: swapping one model for another — a different version, a different brand, a different tier — can cut cost or latency by a wide margin. I have seen a single swap come in around **50% cheaper** for the same task. But a swap like that is only safe behind a validation process: an evaluation set built from real cases, and a regression gate that says the new version does not ship unless it is at least as good as the one in production. Without that, you are trading an invisible drop in quality for a visible drop in the invoice — and finding out from users.
+The clearest example: swapping one model for another — a different version, a different brand, a different tier — can cut cost or latency by a wide margin for the same task. But a swap like that is only safe behind a validation process: an evaluation set built from real cases, and a regression gate that says the new version does not ship unless it is at least as good as the one in production. Without that, you are trading an invisible drop in quality for a visible drop in the invoice — and finding out from users.
 
 So the thing that unlocks the saving is not the swap. It is the harness that lets you make the swap without fear. Build the measurement first; then the optimisations stop being gambles.
 
