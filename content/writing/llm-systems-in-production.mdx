@@ -1,0 +1,58 @@
+---
+title: "What 'in production' really asks of an LLM system"
+date: "2026-06-07"
+summary: "A production LLM or agent system succeeds only when quality, latency, cost, feedback and fallback hold at once — and aligned with the product. That alignment is also where the big, safe wins hide: sometimes a single model swap is ~50% cheaper, if you can prove quality didn't move."
+tags: ["production", "llm", "agentic", "cost", "rag", "evaluation"]
+draft: false
+---
+
+A demo answers one question: can this produce a good output once. Production asks a different one: does it produce good outputs *at scale, every time, fast enough, cheaply enough, and predictably* — while the world underneath it (traffic, models, data) keeps moving. The gap between those two questions is where most LLM and agent projects quietly stall.
+
+What makes it hard is that "production-ready" is not one property. It is several that have to hold *at the same time*, and they trade off against each other. The skill I bring is looking at all of them at once — because optimising any one in isolation usually breaks another.
+
+## The aspects that have to hold at once
+
+- **Output quality** — faithfulness, relevance, and format, measured against *your product's* definition of good, not a leaderboard. A legal answer's quality is citation integrity; a support reply's quality is resolution; a summary's is no invented facts.
+- **Load and requests** — throughput, concurrency, rate limits, timeouts. A flow that's fine at one request is a different system at a thousand.
+- **Feedback — explicit and implicit.** Explicit is ratings and corrections. Implicit is the larger, cheaper signal most teams ignore: the edit a user makes to your output, the re-ask, the abandonment, the copy-paste. Implicit feedback is your biggest unlabelled eval set, already being generated.
+- **The flows** — how a request actually moves end to end: retrieval, the chain of model calls, tool calls, post-processing. You cannot improve what you have not traced.
+- **Latency** — not the average, but p95, and *where* the time is spent. Often one step owns most of it.
+- **Cost** — the real invoice under real traffic, not the price sheet. Retries, caching behaviour, and token counts move it by multiples.
+- **Fallback and stability** — what happens when a provider degrades, a call times out, or a model ships a new version overnight. A degraded mode, a tested fallback, retries, and a way to stop the thing without a deploy.
+- **Observability that ties it together** — when something is wrong in production, you need to reconstruct the exact path in minutes, not guess.
+
+None of these is optional, and you cannot tune them one at a time. Faster can mean worse. Cheaper can mean fragile. The job is to hold the whole set in view and move it together, aligned with what *this* product actually values.
+
+## The shortcut nobody validates
+
+Here is the part teams underestimate. Once the whole picture is instrumented, large, safe wins appear that look almost too easy.
+
+The clearest example: swapping one model for another — a different version, a different brand, a different tier — can cut cost or latency by a wide margin. I have seen a single swap come in around **50% cheaper** for the same task. But a swap like that is only safe behind a validation process: an evaluation set built from real cases, and a regression gate that says the new version does not ship unless it is at least as good as the one in production. Without that, you are trading an invisible drop in quality for a visible drop in the invoice — and finding out from users.
+
+So the thing that unlocks the saving is not the swap. It is the harness that lets you make the swap without fear. Build the measurement first; then the optimisations stop being gambles.
+
+## Where faster-and-cheaper actually comes from
+
+The levers, roughly in the order I reach for them:
+
+- **A validation/eval harness first.** Measurement before optimisation, or you are optimising blind.
+- **Right-size and route models.** Use a light, fast model for the easy steps and reserve the expensive one for where it actually changes the answer.
+- **A retrieval setup that genuinely grounds.** A lot of "the model is wrong" is really "the model was given the wrong context." Often the highest-quality *and* cheapest fix is a RAG setup that fits the actual task, rather than a bigger model papering over weak retrieval.
+- **Delete complexity.** Systems are frequently over-built — a tangle of steps where a simpler, isolated path would be faster, cheaper, and easier to maintain. Compartmentalising the pieces so each can be changed without disturbing the rest is itself a performance and reliability win.
+- **Split a heavy prompt into a chain or a tree.** Sometimes one giant prompt is doing too much; breaking it into focused steps improves quality and structure, and — not incidentally — makes caching far more effective.
+- **Cache, implicitly and explicitly.** Prefix/context caching stops you paying, every request, for the same unchanging instructions and context.
+- **A fallback you have actually exercised.** One that has only ever lived in config is a story, not a capability.
+
+Most of these make the system *better and cheaper and more stable at once*, which is only possible because you are looking at the aspects together rather than chasing one number.
+
+## Two examples
+
+**Upheal** — leading AI there, I brought model-running costs down by roughly **50%** without a quality regression. The reason it was safe to do was the evaluation framework underneath it: every change was gated against measured quality, so cost came out of the system without anyone discovering the loss later.
+
+**Lexomat** — my own legal-research product, where the failure mode that matters most is a confident, wrong citation. Two things guard against it. First, references are **structurally checked against the corpus**: a cited source has to actually exist and be relevant, or it is dropped or softened rather than shown as authority — so the system does not hallucinate references, it grounds them. Second, a **temporal guard**: a legal answer depends on which version of a law was in force at the relevant time, so the system checks cited versions against their effective dates *deterministically* and only asks a model to judge the remaining semantic question. For a legal — or any data-sensitive — product, that kind of robustness is not a nice-to-have; it is the feature.
+
+## How I work on this
+
+An engagement usually runs the same shape: map and instrument the flows, pin down the product's real quality bar, build the validation harness, then go find the shortcuts — model, retrieval, simplification, caching, chaining — and ship each one behind the gate, with a tested fallback and the observability to operate it. The savings and the speed-ups are often large; they are shippable precisely because quality and stability are being measured right alongside them.
+
+If your LLM or agent system works in the demo but you are unsure it works in production — or you suspect it is costing far more than it should — [that is exactly the work I do](mailto:maros@marosjanco.com).
