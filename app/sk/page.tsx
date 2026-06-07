@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Container } from "@/components/Container";
 import { Section, SectionHeading } from "@/components/Section";
 import { TrustBar } from "@/components/home/TrustBar";
 import { site, bookingHref } from "@/lib/site";
+import { getAllPosts } from "@/lib/writing";
 
 const skDescription =
   "Senior AI inžinier pre slovenské firmy. Automatizácia procesov (podpora, dokumenty, faktúry) a AI do produktu (vyhľadávanie, asistenti, agenti). 30 minút zadarmo. Bez prostredníka — priamo so mnou.";
@@ -76,6 +78,8 @@ const skMailto =
   encodeURIComponent("Dopyt z marosjanco.com");
 
 export default function SkPage() {
+  const posts = getAllPosts().slice(0, 3);
+
   return (
     <div lang="sk">
       {/* Hero */}
@@ -182,6 +186,46 @@ export default function SkPage() {
           </p>
         </Container>
       </Section>
+
+      {/* Píšem (mirrors EN "Writing"; articles are in English) */}
+      {posts.length > 0 && (
+        <Section id="pisem" divider>
+          <Container width="wide">
+            <SectionHeading>Píšem</SectionHeading>
+            <p className="mb-8 max-w-[620px] text-[16px] leading-[1.6] text-muted">
+              Poznámky o budovaní produkčných AI systémov a o tom, ako firmy
+              reálne zavádzajú AI. Články sú v angličtine.
+            </p>
+            <ul className="flex flex-col gap-6">
+              {posts.map((p) => (
+                <li key={p.slug}>
+                  <Link href={`/writing/${p.slug}`} className="group block">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+                      <time className="font-mono text-[13px] text-muted">
+                        {p.date}
+                      </time>
+                      <div>
+                        <h3 className="text-[17px] font-semibold transition-colors group-hover:text-accent">
+                          {p.title}
+                        </h3>
+                        <p className="mt-1 text-[16px] text-muted">
+                          {p.summary}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/writing"
+              className="mt-8 inline-block text-[15px] text-accent hover:opacity-70"
+            >
+              Všetky články →
+            </Link>
+          </Container>
+        </Section>
+      )}
 
       {/* Kontakt */}
       <Section id="kontakt" divider>
