@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import Image from "next/image";
 import { Container } from "@/components/Container";
 import { Section, SectionHeading } from "@/components/Section";
+import { Portrait } from "@/components/home/Portrait";
 
 // Graceful degrade (spec §3.6): if the optimised portrait is absent at build
 // time, the bio takes full width rather than rendering a broken image.
@@ -22,19 +22,7 @@ export function About() {
               : "max-w-[640px]"
           }
         >
-          {hasPortrait && (
-            <div className="order-first">
-              <Image
-                src="/portrait.jpg"
-                alt="Maroš Jančo"
-                width={520}
-                height={650}
-                sizes="(max-width: 768px) 100vw, 260px"
-                className="w-full rounded-lg object-cover"
-                priority
-              />
-            </div>
-          )}
+          {hasPortrait && <Portrait />}
           <div className="space-y-5 text-[17px] leading-[1.6]">
             <p>
               I&rsquo;m a senior AI engineer with 9+ years shipping production

@@ -7,11 +7,18 @@ const columns = [
     body: (
       <>
         <p>
-          Most engagements start with a conversation like: &ldquo;our RAG
-          retrieves the wrong documents and we can&rsquo;t diagnose why,&rdquo;
-          &ldquo;our LLM costs are 4x what we modeled,&rdquo; &ldquo;our agent
-          demos beautifully but breaks with real users,&rdquo; or &ldquo;we need
-          an evaluation framework before our next release.&rdquo;
+          Every engagement starts with a{" "}
+          <span className="text-fg">free first call</span>. We walk through how
+          your company actually runs — your day-to-day flows, where time is
+          lost, what&rsquo;s still done by hand — and I tell you honestly
+          what&rsquo;s worth automating or improving, and what isn&rsquo;t.
+        </p>
+        <p className="mt-3">
+          From there I can build something new, or make what you already have{" "}
+          <span className="text-fg">faster, cheaper and more reliable</span> —
+          improving existing automations and infrastructure, not just greenfield
+          work. That ranges from &ldquo;our LLM costs are 4x what we
+          modeled&rdquo; to &ldquo;we still process every order by hand.&rdquo;
         </p>
         <p className="mt-3">
           Typically 1–3 months, scoped per problem. I take on a small number of
@@ -23,21 +30,33 @@ const columns = [
   {
     title: "Pricing",
     body: (
-      <p>
-        Engagements priced per project or per day, scoped in the first call.
-        I&rsquo;ll send a clear range within 24 hours of our initial email
-        exchange.
-      </p>
+      <>
+        <p>
+          The first call is free, with no obligation. Once we&rsquo;ve scoped
+          the problem together, I send a clear price range within 24 hours —
+          fixed price for well-defined projects, or a day rate for ongoing and
+          exploratory work.
+        </p>
+        <p className="mt-3">
+          I personally lead and build every engagement (senior Python /
+          full-stack) and bring in additional vetted senior engineers under my
+          direction when a project needs more hands or a specialist skill — a
+          small, senior team without the overhead or layers of a big
+          consultancy. You always work directly with me.
+        </p>
+      </>
     ),
   },
   {
     title: "Working style",
     body: (
       <p>
-        Remote-first from Slovakia with regular travel — comfortable working
-        hybrid across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich,
-        Prague, Vienna) on a roughly monthly cadence. Async-friendly, English,
-        EU/UK timezones.
+        I&rsquo;m based in Slovakia and genuinely enjoy meeting in person —
+        happy to come to you anywhere in Slovakia, and to work on-site or hybrid
+        across major EU hubs (London, Berlin, Munich, Amsterdam, Zurich, Prague,
+        Vienna) as often as a project benefits from it. Between visits
+        I&rsquo;m responsive and async-friendly, working in Slovak and English
+        across EU/UK timezones.
       </p>
     ),
   },
