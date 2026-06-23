@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 612" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9aa6b8"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1f3a68"/>
+    </marker>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="180%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#1f3a68" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect x="2" y="2" width="856" height="608" rx="16" fill="#f6f4ee" stroke="#e6e1d6"/>
+  <text x="30" y="34" fill="#1f3a68" font-size="12" font-weight="700" letter-spacing="1.6">TWO LAYERS OF MEMORY</text>
+
+  <!-- ============ PANEL A : IN-BAND ============ -->
+  <text x="30" y="62" fill="#1f3a68" font-size="14.5" font-weight="700">In-band <tspan fill="#9aa6b8">&#183;</tspan> during a session</text>
+  <rect x="24" y="74" width="812" height="96" rx="12" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+
+  <!-- agent box -->
+  <rect x="60" y="98" width="180" height="48" rx="10" fill="#eef2f8" stroke="#1f3a68"/>
+  <text x="150" y="119" text-anchor="middle" fill="#1f3a68" font-size="13.5" font-weight="700">Agent session</text>
+  <text x="150" y="135" text-anchor="middle" fill="#5b6b82" font-size="11">does the task + learns</text>
+
+  <!-- read/write double arrow -->
+  <text x="300" y="114" text-anchor="middle" fill="#6b6b6b" font-size="11">read / write</text>
+  <line x1="246" y1="122" x2="352" y2="122" stroke="#9aa6b8" stroke-width="1.6" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <!-- memory cylinder -->
+  <g>
+    <path d="M360 100 v44 a40 10 0 0 0 80 0 v-44" fill="#f2efe8" stroke="#c9c2b3"/>
+    <ellipse cx="400" cy="100" rx="40" ry="10" fill="#fbfaf6" stroke="#c9c2b3"/>
+    <text x="400" y="128" text-anchor="middle" fill="#3a3833" font-size="12" font-weight="600">Memory</text>
+    <text x="400" y="142" text-anchor="middle" fill="#6b6b6b" font-size="10.5">store</text>
+  </g>
+
+  <!-- limits -->
+  <text x="560" y="106" fill="#9a5b4a" font-size="11.5" font-weight="700">Structural limits</text>
+  <text x="560" y="126" fill="#7a6a62" font-size="11.5">&#8627; split focus &#8212; do vs. learn</text>
+  <text x="560" y="145" fill="#7a6a62" font-size="11.5">&#8627; blind across sessions &amp; fleet</text>
+
+  <!-- divider -->
+  <line x1="24" y1="192" x2="836" y2="192" stroke="#e6e1d6" stroke-width="1.2"/>
+
+  <!-- ============ PANEL B : OUT-OF-BAND ============ -->
+  <text x="30" y="218" fill="#1f3a68" font-size="14.5" font-weight="700">Out-of-band &#8212; &#8216;dreaming&#8217; <tspan fill="#9aa6b8">&#183;</tspan> batch, dedicated token budget</text>
+
+  <!-- input boxes -->
+  <rect x="150" y="234" width="210" height="44" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+  <text x="255" y="261" text-anchor="middle" fill="#3a3833" font-size="12.5" font-weight="600">Memory store</text>
+
+  <rect x="500" y="234" width="210" height="44" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+  <text x="605" y="255" text-anchor="middle" fill="#3a3833" font-size="12.5" font-weight="600">Session transcripts</text>
+  <text x="605" y="270" text-anchor="middle" fill="#6b6b6b" font-size="10.5">+ tool calls &amp; metadata</text>
+
+  <!-- inputs -> orchestrator -->
+  <g stroke="#9aa6b8" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M255 278 C 255 296, 360 290, 392 308"/>
+    <path d="M605 278 C 605 296, 500 290, 468 308"/>
+  </g>
+
+  <!-- orchestrator -->
+  <rect x="330" y="310" width="200" height="44" rx="10" fill="#eef2f8" stroke="#1f3a68" filter="url(#s)"/>
+  <text x="430" y="337" text-anchor="middle" fill="#1f3a68" font-size="13.5" font-weight="700">Orchestrator</text>
+
+  <!-- orchestrator -> sub-agents -->
+  <g stroke="#9aa6b8" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M410 354 C 360 372, 290 366, 240 386"/>
+    <path d="M430 354 L 430 386"/>
+    <path d="M450 354 C 500 372, 570 366, 620 386"/>
+  </g>
+
+  <!-- sub-agents -->
+  <g>
+    <rect x="155" y="388" width="160" height="46" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+    <rect x="350" y="388" width="160" height="46" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+    <rect x="545" y="388" width="160" height="46" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="235" y="409" fill="#3a3833" font-size="12.5" font-weight="600">sub-agent</text>
+    <text x="235" y="424" fill="#6b6b6b" font-size="10.5">find patterns</text>
+    <text x="430" y="409" fill="#3a3833" font-size="12.5" font-weight="600">sub-agent</text>
+    <text x="430" y="424" fill="#6b6b6b" font-size="10.5">find patterns</text>
+    <text x="625" y="409" fill="#3a3833" font-size="12.5" font-weight="600">sub-agent</text>
+    <text x="625" y="424" fill="#6b6b6b" font-size="10.5">find patterns</text>
+  </g>
+
+  <!-- sub-agents -> proposals -->
+  <g stroke="#9aa6b8" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M235 434 C 235 452, 340 448, 372 466"/>
+    <path d="M430 434 L 430 466"/>
+    <path d="M625 434 C 625 452, 520 448, 488 466"/>
+  </g>
+
+  <!-- proposals -->
+  <rect x="250" y="468" width="360" height="54" rx="10" fill="#ffffff" stroke="#e2ddd2" filter="url(#s)"/>
+  <text x="430" y="490" text-anchor="middle" fill="#3a3833" font-size="13" font-weight="700">Proposed memory edits</text>
+  <text x="430" y="508" text-anchor="middle" fill="#6b6b6b" font-size="11">+ example transcripts &#183; prevalence stats</text>
+
+  <!-- proposals -> human -->
+  <line x1="430" y1="522" x2="430" y2="556" stroke="#9aa6b8" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- human -->
+  <rect x="320" y="558" width="220" height="44" rx="10" fill="#fff7ed" stroke="#1f3a68" filter="url(#s)"/>
+  <text x="430" y="585" text-anchor="middle" fill="#1f3a68" font-size="13" font-weight="700">Human &#183; accept / reject</text>
+
+  <!-- feedback loop : human -> memory store (left channel) -->
+  <path d="M320 580 H 52 Q 40 580 40 568 V 268 Q 40 256 52 256 H 146"
+        fill="none" stroke="#1f3a68" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a2)"/>
+  <text x="33" y="430" transform="rotate(-90 33 430)" text-anchor="middle" fill="#1f3a68" font-size="11" font-weight="600">approved &#183; versioned &#183; roll-back-able</text>
+</svg>

@@ -1,0 +1,87 @@
+---
+title: "Context engineering, memory, and 'dreaming'"
+date: "2026-06-23"
+summary: "Notes on Anthropic's AI DevCon talk on context engineering — from CLAUDE.md to memory-as-filesystem to an out-of-band consolidation process they call 'dreaming' — with a production engineer's read on which parts are real leverage and which are just databases wearing a trench coat."
+tags: ["context-engineering", "memory", "agentic", "llm", "production"]
+draft: false
+---
+
+I watched a talk from Anthropic's AI DevCon — Lamish, from their applied AI team — on where context engineering has landed in the last year. It's a good map of the territory, and it lines up with what I keep running into when I take agent systems from demo to production: the model intelligence is rarely the bottleneck. The context around it is.
+
+Below is the through-line of the talk, plus where I'd push, agree, or add a caveat from having built these systems for real.
+
+## The core claim: intelligence doesn't compound, context does
+
+A new model won't, out of the box, know its way around *your* codebase, *your* conventions, or *your* user's preferences. That knowledge is largely orthogonal to raw capability — which is exactly why investing in it pays off across model upgrades. You're building a multiplier that survives the next release, not a patch for the current one.
+
+This matches my own framing of [what "in production" really asks of an LLM system](/writing/llm-systems-in-production): the win is rarely a smarter model, it's the harness around it. Context engineering is one of the biggest levers in that harness.
+
+## The one-year arc, compressed
+
+The talk walks the evolution as a sequence of "do the simple thing that works," each step solving the previous step's failure mode:
+
+- **`CLAUDE.md`** — a markdown file of instructions injected at the start of a session. Unreasonably effective at steering the model toward what matters. Its failure mode: context bloat. The file grows, and important preferences drown.
+- **Memory tools** — let the agent autonomously decide when to read, write, and update memory, *in-band* (during a session). Autonomy here worked well.
+- **Skills** — solve the ever-growing-context problem with **progressive disclosure**: the agent only reads a few lines of front-matter to decide whether to load the full skill. Deep detail stays available without sitting in context permanently. Good for *procedural* workflows where you have an opinion about how a process should run end to end.
+- **Memory as a filesystem** — the current state of the art. Stop being clever about bespoke memory tools; just give agents a directory of markdown and the normal tools (`bash`, `grep`) they're already good at. Indexing + search *is* progressive disclosure.
+
+![The one-year arc of context engineering as four stages, each solving the previous one's failure mode: CLAUDE.md (markdown injected at session start; bloats as it grows) → Memory tools (agent reads/writes its own memory in-band; no cross-session view) → Skills (progressive disclosure, load detail on demand; human-curated) → Memory as files (markdown plus grep/bash, indexed and searchable; the current state of the art).](/writing/context-engineering-arc.svg)
+
+The distilled rules: markdown for memories, let them grow large but give agents fast ways to search them, and give agents autonomy when writing.
+
+The bookshelf analogy is the part worth keeping: you don't load every book into your head, you scan the spines and pull the one the conversation calls for. That's the whole game — cheap retrieval over a large store beats stuffing everything into the window.
+
+## Where theory meets production
+
+This is the half of the talk I care about most, because "let agents manage markdown files" falls apart the moment you have a fleet. The failure modes are exactly the ones you'd predict:
+
+- Multiple agents writing the same file at once.
+- One agent writing a wrong (or prompt-injected) fact into an org-wide context that *every* other agent reads from — a blast radius problem.
+- Humans and agents editing the same memory with no audit trail.
+- Memories going stale: true once, wrong now.
+
+Their guardrails are, frankly, classic engineering:
+
+- **Versioning** — store history, know which session/transcript produced a change, be able to roll back.
+- **Concurrency via hashing** — hash before drafting an edit, hash again before committing; if they differ, someone else wrote in the meantime, so re-pull and retry. (This is optimistic concurrency control / compare-and-swap.)
+- **Permissioning** — org-wide context read-only to most agents; an agent's own scratchpad writable. A gradient from curated global knowledge down to per-agent working memory.
+- **Portability** — curated memory is valuable, so put it behind a clean API and let it move across surfaces.
+
+An audience member asked the obvious question: *at what point are we just reinventing databases?* The honest answer in the talk was basically "yes, and on purpose." Having learned which primitives actually matter, they're hardening them into the harness deterministically instead of leaving them to the model. That's the right instinct. **The skill is drawing the boundary** between what the agent decides autonomously and what the harness enforces mechanically. Versioning and concurrency are not things you want an LLM improvising.
+
+If you're standing this up yourself, none of these are exotic — they're git semantics, row versions, and an ACL. The interesting design work is the boundary, not the database.
+
+## The real new idea: out-of-band "dreaming"
+
+In-band memory has two structural limits the talk names well:
+
+1. **Split focus.** You're asking one agent to both *do the task* and *invest in memory for its future self*. That's a genuinely hard optimization — how much capacity should it spend helping a version of itself it will never meet?
+2. **Visibility.** A single session can't see patterns *across* sessions or *across* a fleet. When your agent makes the same mistake for the tenth time, it doesn't feel the frustration — every session is a fresh context window.
+
+So they add an **out-of-band** process — "dreaming" — with its own dedicated token budget, run in batch. It takes the existing memory store plus a batch of session transcripts (including tool calls and metadata, not just the chat turns), fans out sub-agents to look for patterns, and an orchestrator proposes concrete edits to the memory store — with example transcripts and prevalence stats attached so a human can accept or reject each change.
+
+![Two layers of memory. In-band, during a session: an agent session both does the task and reads/writes a memory store, with two structural limits — split focus (do vs. learn) and blindness across sessions and the fleet. Out-of-band 'dreaming', run in batch with a dedicated token budget: the memory store plus session transcripts (with tool calls and metadata) feed an orchestrator, which fans out to sub-agents that find patterns; they converge into proposed memory edits with example transcripts and prevalence stats, which a human accepts or rejects; approved edits flow back to the memory store as versioned, roll-back-able writes.](/writing/dreaming-loop.svg)
+
+The school analogy carries it: students do the work, teachers grade, a head teacher sees across everyone and notices "the whole geography cohort is missing a topic" or "everyone's calculator is in radians, not degrees." Those are fleet-level patterns no single student can see. In agent terms: a topic missing from memory, or a tool consistently mis-configured across runs.
+
+I like this for two reasons. First, it correctly separates **doing** from **learning** — they have different time horizons and shouldn't compete for the same context budget. Second, it's where the cross-session signal actually lives. The implicit-feedback argument I keep making — that the largest, cheapest eval set is the behavior you're already logging — applies directly here: dreaming is, in effect, a consolidation pass over that signal.
+
+Two caveats I'd hold onto:
+
+- **"Expensive" is the wrong frame, but only if it pays back.** The talk's defense is that better memory makes agents one-shot tasks, dropping downstream token spend. Plausible — but that's a claim to *measure*, not assume. I'd gate dreaming behind the same regression discipline as any change that touches behavior: a proposed memory edit should have to demonstrate it doesn't make things worse before it ships. See [releasing agentic systems safely](/writing/releasing-agentic-systems-safely).
+- **Auto-applied memory edits are a behavior change with no deploy.** A bad consolidation that silently rewrites org-wide context is exactly the blast-radius problem the guardrails exist to prevent — now generated by a machine at batch scale. Human-in-the-loop acceptance, versioning, and rollback aren't optional decoration here; they're load-bearing.
+
+## What I'd actually take away
+
+- **Start with the simple thing.** A `CLAUDE.md`, a few skills, and letting the agent manage a markdown store gets you surprisingly far. Don't build the database first.
+- **Add guardrails only when scale forces them** — many agents, long-running workspaces, complex domains. Then versioning, concurrency control, and permissioning stop being over-engineering and become the thing standing between you and a fleet that poisons its own memory.
+- **Separate doing from learning.** The out-of-band consolidation idea is the genuinely useful conceptual move, independent of whatever you call it.
+- **None of this is coding-specific.** The same memory loop applies to anything an agent does repeatedly — the talk's presenter uses it for writing slide decks; I'd use it anywhere there's a recurring task with accumulating preferences.
+
+The honest summary: most of the production layer is well-understood engineering being re-applied with care, and that's a feature. The frontier bit is the loop that lets a fleet notice its own recurring mistakes and fix the context that causes them — without a human babysitting every session. That's a real step toward continual learning, and it's still very much open research.
+
+---
+
+*Based on Lamish's talk at Anthropic's AI DevCon — [video here](https://www.youtube.com/watch?v=tTcxVv8HHNw). The framing of the production guardrails and the "dreaming" process is theirs; the opinions about where they hold up are mine.*
+
+*I spend most of my time taking LLM and agent systems from demo to production. If context engineering, memory, or evaluation harnesses are on your plate, I'm happy to compare notes: [maros@marosjanco.com](mailto:maros@marosjanco.com).*
