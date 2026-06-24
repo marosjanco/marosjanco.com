@@ -47,7 +47,7 @@ Their guardrails are, frankly, classic engineering:
 - **Permissioning** — org-wide context read-only to most agents; an agent's own scratchpad writable. A gradient from curated global knowledge down to per-agent working memory.
 - **Portability** — curated memory is valuable, so put it behind a clean API and let it move across surfaces.
 
-An audience member asked the obvious question: *at what point are we just reinventing databases?* The honest answer in the talk was basically "yes, and on purpose." Having learned which primitives actually matter, they're hardening them into the harness deterministically instead of leaving them to the model. That's the right instinct. **The skill is drawing the boundary** between what the agent decides autonomously and what the harness enforces mechanically. Versioning and concurrency are not things you want an LLM improvising.
+An audience member asked the obvious question: *at what point are we just reinventing databases?* The answer pushed back on the framing — not reinventing, but *merging back into* proven software-engineering practices. The arc was: first let agents write to markdown and commit whatever they want; then, having seen which primitives actually matter, codify those in the harness deterministically — "no need to reinvent the wheel." That's the right instinct. **The skill is drawing the boundary** between what the agent decides autonomously and what the harness enforces mechanically. Versioning and concurrency are not things you want an LLM improvising.
 
 If you're standing this up yourself, none of these are exotic — they're git semantics, row versions, and an ACL. The interesting design work is the boundary, not the database.
 
