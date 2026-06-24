@@ -74,7 +74,7 @@ Two caveats I'd hold onto:
 ## What I'd actually take away
 
 - **Start with the simple thing.** A `CLAUDE.md`, a few skills, and letting the agent manage a markdown store gets you surprisingly far. Don't build the database first.
-- **Add guardrails only when scale forces them** — many agents, long-running workspaces, complex domains. Then versioning, concurrency control, and permissioning stop being over-engineering and become the thing standing between you and a fleet that poisons its own memory.
+- **Add guardrails when scale — or compliance — forces them.** Scale is one trigger: many agents, long-running workspaces, complex domains. But security, privacy, and regulation are another, and they don't wait for scale — in a data-sensitive or regulated product, an audit trail (who/what changed a memory, and from which session), access control over who can write where, and rollback are table stakes from day one, even with a single agent. Either way, versioning, concurrency control, and permissioning stop being over-engineering and become the thing standing between you and a fleet that poisons its own memory — or leaks it.
 - **Separate doing from learning.** The out-of-band consolidation idea is the genuinely useful conceptual move, independent of whatever you call it.
 - **None of this is coding-specific.** The same memory loop applies to anything an agent does repeatedly — the talk's presenter uses it for writing slide decks; I'd use it anywhere there's a recurring task with accumulating preferences.
 
