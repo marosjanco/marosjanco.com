@@ -6,13 +6,17 @@ tags: ["agentic", "engineering", "llm", "claude", "ai-development", "loops", "gs
 draft: false
 ---
 
-Loop engineering went viral this week. Boris Cherny (Claude Code's creator) and Peter Steinberger (OpenClaw) used the phrase; Andrew Ng published his three-loop framework; Andrej Karpathy dropped LOOPS.md, a field notes document on agents that run for days. The phrase is new. The idea is real, and people who have been building with agents for a while recognise it immediately.
+Loop engineering has been on an exponential curve all year, with notable growth last year too. This week the curve broke into the mainstream: Boris Cherny (Claude Code's creator) and Peter Steinberger (OpenClaw) used the phrase; Andrew Ng published his three-loop framework; Andrej Karpathy dropped LOOPS.md, a field notes document on agents that run for days. The phrase is new. The idea is real, and people who have been building with agents for a while recognise it immediately.
 
-Here is what it looks like from the inside of building Lexomat — a full-stack legal AI — as a solo founder running these loops in production. These are not theoretical principles. Each one cost something to learn.
+![Google Trends for "loop engineering" — exponential growth through 2026, with a notable upward curve already in 2025](/writing/loop-engineering-google-trends.png)
+
+Here is what it looks like from the inside of building Lexomat — a full-stack legal AI — across enough real features that the patterns stopped being opinions. These are not theoretical principles. Each one cost something to learn.
 
 ## The skeleton: three loops at three timescales
 
 Andrew Ng's framework is the right starting point. Three loops, nested at different timescales:
+
+![Andrew Ng's three-loop framework: agentic coding loop (minutes, the agent alone), developer feedback loop (hours, the human reviewing and steering), and external feedback loop (days to weeks, real users and data reshaping the product vision)](/writing/andrew-ng-three-loops.jpeg)
 
 - **Agentic coding loop** (minutes): the agent writes code, runs tests, verifies its own output in a browser or against an eval set, and iterates. The human is not in this loop at all.
 - **Developer feedback loop** (hours): you review what was built, make higher-level decisions about direction, and give new instructions.
@@ -20,7 +24,9 @@ Andrew Ng's framework is the right starting point. Three loops, nested at differ
 
 Most people think "using an AI coding agent" means occasionally asking it to write a function. That is prompting, not loop engineering. The difference is whether the agent can close its own inner loop — build, verify, fix, repeat — without you. That is the prerequisite for everything else.
 
-## The commandments
+## The Loop Engineering commandments
+
+A combination of Karpathy's LOOPS.md, Andrew Ng's three-loop framework, and what I learned building Lexomat. None of this is invented — it is observed and credited.
 
 ### I. Write the loop, not the prompt
 
@@ -34,7 +40,7 @@ Karpathy's most important structural rule: three roles, three context windows, t
 
 Mixing these roles is the most common failure mode. The moment a model evaluates its own output, it becomes sycophantic and the loop quietly converges on slop.
 
-GSD — the structured agentic development methodology I use — formalises this split operationally. `/gsd-plan-phase` produces a `PLAN.md` before any code is written. `/gsd-execute-phase` builds against it in a fresh context window. `/gsd-verify-work` checks whether the goal was achieved, not just whether the tasks were completed. Three separate agents, three separate system prompts, no shared context except the plan file on disk.
+Several frameworks embed this planner–builder–evaluator split operationally — GSD, Superpowers, OpenSpec, Spec Kit — each with a different opinion about how much ceremony the planner and evaluator should bring. Lexomat uses GSD: `/gsd-plan-phase` produces a `PLAN.md` before any code is written, `/gsd-execute-phase` builds against it in a fresh context window, `/gsd-verify-work` checks whether the goal was achieved rather than whether the tasks were completed. Three separate agents, three separate system prompts, no shared context except the plan file on disk. The trade-offs — cost, time, repo baseline, when each one is the right tool — are in the companion post.
 
 ### III. Negotiate testable contracts before writing code — through dialogue, not solo
 
