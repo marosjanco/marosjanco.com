@@ -142,19 +142,26 @@ On a typical feature in Lexomat:
 
 Total elapsed time from brief to merged PR on a medium feature: two to four hours. Time I spend actively working: twenty to forty minutes. Any problem B that surfaces becomes a filed issue, not a detour.
 
-## The stack: three tools, one decision rule
+## The stack: one task, five very different runs
 
-The frameworks going viral alongside this conversation — GSD, Superpowers, Claude Code — solve different problems and come at very different costs. The decision is not which one is best. It is which one is appropriate for this task.
+The frameworks going viral alongside this conversation — GSD, Superpowers, OpenSpec, Spec Kit, Claude Code — solve different problems and come at very different costs. The decision is not which one is best. It is which one is appropriate for this task.
 
-**Head-to-head on the same feature:**
+**Head-to-head on the same build:**
 
-| | Claude Code native | Superpowers | GSD |
-|---|---|---|---|
-| **Time** | ~20 min | ~60 min | ~105 min |
-| **Tokens** | ~200K | ~250K | ~1.2M |
-| **Planning cost alone** | ~50K | ~200K | ~600K |
+| | Native | Superpowers | OpenSpec | Spec Kit | GSD |
+|---|---|---|---|---|---|
+| **Time ¹** | 20 min | ~60 min | ~35 min ᵉ | ~100 min ᵉ | ~105 min |
+| **Tokens ¹** | 200K | 250K | ~350K ᵉ | ~600K ᵉ | 1.2M |
+| **Time ratio ²** | ~0.5× ᵉ | ~1.7× ᵉ | 1× | ~2.7× | ~2.9× |
+| **Token ratio ²** | ~0.6× ᵉ | ~0.7× ᵉ | 1× | ~1.7× | ~3.6× |
 
-GSD costs 3× more than Superpowers and 12× more than native. That premium is justified exactly once: when the coordination overhead or context rot would cost more than the framework itself. For most tasks, that threshold is never reached.
+¹ Chase AI blog (chaseai.io), April 2026 — simple projects, same model, per-session context tokens.
+² The Gray Cat YouTube channel, May–June 2026 — full PRD builds, total API tokens across threads. Headline numbers: GSD 126M tokens vs OpenSpec 35.3M tokens (3.57× ratio); OpenSpec 35.4M tokens / 2.5h vs Spec Kit 59.8M tokens / 5h (1.69× tokens, 2× wall-clock).
+ᵉ Derived via GSD as the cross-dataset anchor (±40–50% — treat as directional, not precise). The roughest cells are OpenSpec and Spec Kit on the simple-website rows: they bridge context tokens (Chase AI) against total API tokens (Gray Cat), which are two different measurement units. The full-PRD ratios (² rows) are more reliable — both datasets count something close to total API tokens there, and the headline numbers above are within 5% of the cells.
+
+I have hard numbers for native, Superpowers, and GSD on the same model. The OpenSpec and Spec Kit cells come from The Gray Cat's full-PRD runs: OpenSpec comes in around a third of GSD's cost, Spec Kit at roughly half. A second independent comparison (Jamie Telin, *IT Chronicles*, GPT-5.2) lands the Spec Kit / OpenSpec token ratio at 1.97–2.09×, consistent with the cells above. The numbers are not lab-grade. They are good enough to choose between, which is what the table is for. A deeper walk-through of the comparison — same app, five different runs, what each framework actually changes — is in the companion post.
+
+GSD costs roughly 3× more than Superpowers and 12× more than native. That premium is justified exactly once: when the coordination overhead or context rot would cost more than the framework itself. For most tasks, that threshold is never reached.
 
 **What each layer actually solves:**
 
