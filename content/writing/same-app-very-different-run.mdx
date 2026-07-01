@@ -1,0 +1,152 @@
+---
+title: "Same app. Very different run."
+date: "2026-07-01"
+summary: "Build the same app five times — once under each framework — and watch the cost, the time, and the codebase drift apart. A head-to-head of Claude Code native, Superpowers, OpenSpec, Spec Kit, and GSD, with the methodology honestly disclosed."
+tags: ["agentic", "engineering", "llm", "claude", "ai-development", "gsd", "superpowers", "openspec", "spec-kit", "comparison"]
+draft: true
+---
+
+Same app, five frameworks, five very different runs.
+
+I have been asked, more than any other question this year, which framework to use. Native Claude Code, Superpowers, OpenSpec, Spec Kit, GSD, sometimes BMAD, sometimes a custom harness. The honest answer is "it depends" — but that is useless without numbers, so I sat down and tried to put real numbers on it.
+
+What follows is the comparison I wish I had a year ago: same app, same model, five different runs, and what each one actually costs in time, tokens, and repo quality. The numbers are imperfect. I will say where, and why, and how much weight to put on each cell.
+
+## The setup
+
+The comparison sits on two real datasets, both public, run by different people on different kinds of projects:
+
+- **Chase AI (chaseai.io blog), April 2026** — coding-agent comparison on simple projects (flight simulator and a WebGPU landing page), per-session context tokens, same model. Clean numbers for native, Superpowers, and GSD on a small task.
+- **The Gray Cat (YouTube channel), May–June 2026** — full PRD app builds scored against the Cat Score rubric, total API tokens across threads. GSD vs OpenSpec on a community-style app with auth, profiles, stories, comments, DMs, leaderboard; OpenSpec vs Spec Kit on a self-improving Python coding agent. Bigger projects, broader framework coverage, but total-token accounting rather than per-session.
+
+There is no single dataset that covers all five frameworks on the same build. So I used GSD as the bridge: it is the only framework with hard numbers in both datasets, which lets me anchor the others.
+
+The result is a five-column comparison where some cells are measured and some are derived. I will mark every derived number with an ᵉ so you can put the right weight on it.
+
+## The table
+
+| | Native | Superpowers | OpenSpec | Spec Kit | GSD |
+|---|---|---|---|---|---|
+| **Time ¹** | 20 min | ~60 min | ~35 min ᵉ | ~100 min ᵉ | ~105 min |
+| **Tokens ¹** | 200K | 250K | ~350K ᵉ | ~600K ᵉ | 1.2M |
+| **Time ratio ²** | ~0.5× ᵉ | ~1.7× ᵉ | 1× | ~2.7× | ~2.9× |
+| **Token ratio ²** | ~0.6× ᵉ | ~0.7× ᵉ | 1× | ~1.7× | ~3.6× |
+
+¹ Chase AI blog (chaseai.io), April 2026 — simple projects, same model, per-session context tokens.
+² The Gray Cat YouTube channel, May–June 2026 — full PRD builds, total API tokens across threads. Headline numbers: GSD 126M tokens vs OpenSpec 35.3M tokens (3.57× ratio); OpenSpec 35.4M tokens / 2.5h vs Spec Kit 59.8M tokens / 5h (1.69× tokens, 2× wall-clock).
+ᵉ Derived via GSD as the cross-dataset anchor (±40–50% — treat as directional, not precise). The roughest cells are OpenSpec and Spec Kit on the simple-website rows: they bridge context tokens (Chase AI) against total API tokens (Gray Cat), which are two different measurement units. The full-PRD ratios (² rows) are more reliable — both datasets count something close to total API tokens there, and the headline numbers above are within 5% of the cells.
+
+Read this table as: **GSD costs 3–4× more than the lightest frameworks for similar visible output. Spec Kit is the second-heaviest. OpenSpec is the sweet spot of the spec-driven middle. Superpowers is cheap for what it does. Native is cheapest by a wide margin — but with the fewest guardrails.**
+
+## What each one actually is
+
+Five frameworks, five engagement models. The names get thrown around interchangeably; they are not interchangeable.
+
+**Claude Code native** is plan-then-execute in a single context window. You describe what you want, the agent plans, the agent executes, the agent verifies against whatever you tell it to verify against. No separate phases, no canonical artifacts, no skill files. The default. The fast default. The cheap default — around 200K tokens and twenty minutes for a small feature.
+
+**Superpowers** is a bag of Markdown skills — `brainstorming`, `test-driven-development` (with the Iron Law: no production code without a failing test first), `subagent-driven-development`, `writing-plans`, `requesting-code-review` — that load into whatever harness you already use. It does not change the harness. It changes the discipline. You give it a harness and a goal, it gates the work behind TDD, Socratic brainstorming, and an explicit review step. Around 250K tokens and sixty minutes for the same feature.
+
+**OpenSpec** is the leanest of the spec-driven frameworks. The workflow is `propose → apply → archive`: write a proposal with spec deltas, implement against it, archive the change folder once verified. Each change gets its own folder with `proposal.md`, `specs/`, `design.md`, `tasks.md`. Specs live alongside code in the repo, not in a separate `.planning/` tree. The engagement model is "you drive, the framework holds the structure": you invoke each phase, the framework executes it. Around 350K tokens and thirty-five minutes on the simple-website runs.
+
+**Spec Kit** is GitHub's spec-driven toolkit and the heavyweight of the lightweight tier. Five phases — `constitution → specify → plan → tasks → implement` — with the constitution as a project-level governing document that constrains every subsequent phase. Where OpenSpec is fluid and you can update any artifact anytime, Spec Kit is sequential and gated: do not move on until the current phase is validated. Around 600K tokens and one hundred minutes for the same feature.
+
+**GSD** is the heavyweight. The orchestrator spawns fresh 200K-token subagent contexts per phase, four parallel research agents before each plan, a plan-checker that validates the plan achieves the phase goal, an executor per plan, a verifier that checks against `VERIFICATION.md`. The artifacts are canonical — `PROJECT.md`, `STATE.md`, `PLAN.md`, `VERIFICATION.md` — and they survive session crashes. The engagement model is "the framework drives, you review": set it running, come back when it asks you a question. Around 1.2M tokens and one hundred minutes for a small feature, scaling linearly with phase count for bigger builds.
+
+## The five-by-five: what changes between runs
+
+The same app, the same model, the same goal. What actually differs across runs:
+
+| | Native | Superpowers | OpenSpec | Spec Kit | GSD |
+|---|---|---|---|---|---|
+| **Spec discipline** | None — your prompt | TDD Iron Law + brainstorm gate | Spec deltas, one per change | Constitution + 5-phase gates | Verified per-phase, locked |
+| **Context model** | Single window | Single window + skills | Per-change folder | Sequential phases | Fresh subagent per phase |
+| **Where state lives** | In chat | In chat + skills | In `openspec/changes/` | In `specs/` + `.specify/` | In `.planning/` tree |
+| **Session crash recovery** | Lost | Lost | Spec survives | Spec survives | Full state survives |
+| **Engagement model** | You drive | You drive | You drive | You invoke each phase | Framework drives |
+| **Token cost (relative)** | 0.6× | 0.7× | 1× | 1.7× | 3.6× |
+| **Time cost (relative)** | 0.5× | 1.7× | 1× | 2.7× | 2.9× |
+| **Repo baseline** | Whatever you ask for | Tests via TDD Iron Law | Specs as docs | Constitution + specs | Tests, typecheck, config |
+| **Best fit** | Bug fix, <3 files | Discipline is the risk | Brownfield iteration | Greenfield with opinion | Greenfield + coordination risk |
+
+The column on the right — repo baseline — is the one that does not show up in browser screenshots but pays off on day two. GSD reliably produces tests, typecheck scripts, and configuration hygiene; lighter tools produce them only if you explicitly ask, and the agent will sometimes quietly skip them under time pressure.
+
+## When to use which
+
+Five routing factors, in order:
+
+1. **Complexity**: how many files, subsystems, and decisions does this touch?
+2. **Risk**: what is the cost of a wrong answer — hours of rework, a data migration, a user-visible regression?
+3. **Context depth**: how much project history does the agent need to not hallucinate alignment?
+4. **Engagement model**: do you want to drive, or do you want the framework to drive while you review?
+5. **Session length**: will this fit in one session, or will it span three?
+
+A practical heuristic:
+
+| If... | Use | Why |
+|---|---|---|
+| ≤3 files, clear goal, low risk, fits in one session | **Native** | Cheapest, fastest, sufficient. Reach for it first by default. |
+| Multi-file, discipline is the risk (agent rushes past tests or spec) | **Superpowers** | TDD Iron Law + brainstorm gate + review, on any harness, at 250K. |
+| Brownfield, incremental changes, you want to keep your hands on the wheel | **OpenSpec** | Lean propose→apply→archive. Spec deltas. Specs as docs. |
+| Greenfield, you want opinionated stack constraints, sequential discipline | **Spec Kit** | Constitution + 5 phases. Pairs well with strong opinions about the stack. |
+| Ambiguous scope, multi-subsystem, context rot is the risk | **GSD** | Phase isolation, full state survival, autonomous chaining. |
+| Both discipline AND context rot are risks | **Superpowers inside GSD** | The tools compose. The premium is real but the relief is real too. |
+| You want to own the roadmap and stay in fast loops | **OpenSpec-class** | You invoke each phase. The framework holds the structure, you hold the wheel. |
+| You want the framework to own the project and run autonomous chunks | **GSD** | Set it running, come back to review the result. |
+
+The trap is reaching for the heaviest tool on every task because the heaviest tool produces the best repo baseline. The trap on the other side is reaching for native on every task because it is the cheapest, and then wondering why the agent grades its own work or forgets the spec two hours in.
+
+## What the numbers do not show
+
+Three things the table cannot tell you:
+
+**The visible output is closer than the numbers suggest.** A light framework and a heavy framework, run on the same model, produce apps that look and feel similar in a manual browser pass. The difference shows up in the diff: GSD's diff has tests, typecheck scripts, configuration files. Native's diff has whatever you asked for. On day one, this looks like a tie. On day two — when you add a feature, or refactor, or onboard someone — it is not a tie.
+
+**Token costs do not account for rework.** GSD's 3.6× ratio is upfront cost. The implicit promise is fewer re-prompt cycles, fewer context re-establishments, fewer sessions abandoned and restarted. Hard to put a number on. The reported ratio is honest about the upfront spend but quiet about the downstream savings.
+
+**Session length shapes which framework is even usable.** A two-hour task in native is a thirty-minute task in GSD plus ninety minutes of "framework runs while you do something else." The wall-clock comparison favors frameworks that you can leave running. The attention-cost comparison favors frameworks that finish while you are watching.
+
+## What I would actually pick
+
+If you pinned me down: for a Lexomat-sized codebase (monorepo, FastAPI + Next.js, ~150K lines, lots of small bug fixes and a few large features per week), the routing in practice is:
+
+- **~60% of tasks → native.** Bug fixes, single-file changes, anything under three files with a clear goal.
+- **~25% of tasks → Superpowers inside GSD.** Features that touch three to ten files, where the agent is likely to skip tests or skip the spec without a gate.
+- **~15% of tasks → GSD alone.** Greenfield features or large refactors where context rot would cost more than the framework overhead.
+
+OpenSpec is what I reach for when the task is incremental but I want the spec to survive across sessions — brownfield work where the next change depends on the spec the last change produced. Spec Kit I use rarely: when the stack is constrained and I want a constitution document to enforce it.
+
+The five-way comparison is useful for picking. It is not useful for optimizing. The biggest cost in agentic building is not framework choice; it is whether the contract was right before the build started. The framework choice is downstream of that, and a 2× difference in tokens is rounding error against a wrong contract.
+
+## Methodology notes
+
+The hard numbers in the table come from two datasets:
+
+- **Chase AI blog (chaseai.io), April 2026** — per-session context tokens on simple projects. Headline numbers: native ~200K, Superpowers ~250K, GSD ~1.2M for a small feature. The Chase AI coding-agent comparison post tested Opus 4.7, GPT-5.5, and DeepSeek V4 on a flight simulator and a WebGPU landing page — small projects, same model, per-session accounting.
+- **The Gray Cat (YouTube channel), May–June 2026** — total API tokens across threads on full PRD builds, scored against the Cat Score rubric. Two videos: *GSD vs OpenSpec: Speed, Tokens, and Code Quality* (GPT-5.5 medium reasoning, community app with auth, profiles, stories, comments, DMs, leaderboard) and *OpenSpec vs Spec Kit: Same Brief, Different Roads* (Claude Opus 4.7 1M tier, self-improving Python coding agent). Headline numbers: GSD 126M / 38 threads vs OpenSpec 35.3M / 6 threads (3.57× token ratio); OpenSpec 35.4M tokens / 2.5h vs Spec Kit 59.8M tokens / 5h (1.69× tokens, 2× wall-clock).
+
+There is no single dataset that covers all five frameworks on the same build. I used GSD as the cross-dataset anchor because it is the only framework with measured values in both.
+
+Two independent confirmations of the cells worth flagging:
+
+- **Jamie Telin, *IT Chronicles* (June 2026)** ran OpenSpec vs Spec Kit on GPT-5.2 across two test runs of a chat-support app. Spec Kit / OpenSpec token ratios: 2.09× (test 1: 120,947 vs 57,740) and 1.97× (test 2: 181,040 vs 91,729) — about 16–24% above the 1.69× cell from Gray Cat, well within the ±40–50% uncertainty range the methodology already declares on the ᵉ cells. OpenSpec also used ~20% fewer assistant turns and ~25% fewer tool calls.
+- **Scott Logic review (cited in azanello.com SDD comparison, June 2026)** reports Spec Kit taking 3.5+ hours vs 23 minutes of iterative prompting for the same single feature. That places Spec Kit at ~9× native time, which is steeper than the ² row ratio (2.7×) — the gap is mostly because the Scott Logic feature is small enough that native's per-feature overhead is negligible.
+
+The caveats are real:
+
+- **±40–50% uncertainty on the ᵉ cells.** Treat them as directional, not precise. They are good enough to choose between frameworks. They are not good enough to optimize within a framework.
+- **Context tokens vs total API tokens.** Chase AI reports per-session context; Gray Cat reports total tokens across threads. These are not the same measurement. The full-PRD ratios (² rows) are more reliable because both datasets count something close to total tokens there. The simple-website row (¹) is the roughest.
+- **BMAD is not in the table.** BMAD Full sits past Spec Kit on both time and cost: 6 days total (2 days planning + 4 days implementing), ~$200 in API spend for one full cycle in independent testing (Ry Walker research + ranthebuilder.cloud BMAD v6.0.3 head-to-head). BMAD Quick is closer to Spec Kit in profile (5h planning, 1.5 days implementing, $85). The framework is real, the cost is real, but the slot in this five-way table is not.
+
+If you have a clean dataset on any of the ᵉ cells and want to refine the table, my email is at the bottom of the page. I will update this post when the numbers get better.
+
+## The honest summary
+
+Native is the cheapest and the right default for most tasks. Superpowers is the cheapest way to add discipline without changing your harness. OpenSpec is the lean spec-driven framework — propose, apply, archive, move on. Spec Kit is the heavyweight of the lightweight tier — constitution, five phases, sequential discipline. GSD is the heavyweight — fresh contexts per phase, autonomous chaining, 3–4× the cost for a stronger repo baseline.
+
+The choice is not which framework is best. It is which one is appropriate for this task. The table above is the comparison I wanted when I started asking the question. The footnote honesty is the part I wish more comparison posts included.
+
+The unit of leverage in agentic building is the loop. The framework is the loop's infrastructure. Pick the infrastructure that matches the loop you can actually run.
+
+---
+
+If this kind of framework comparison is useful, the deeper principles — fourteen commandments for building agentic loops in production — are in [Loop engineering: the agentic builder's commandments](/writing/loop-engineering-commandments).
