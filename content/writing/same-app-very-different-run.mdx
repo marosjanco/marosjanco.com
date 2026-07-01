@@ -29,10 +29,10 @@ The result is a five-column comparison where some cells are measured and some ar
 |---|---|---|---|---|---|
 | **Time ¹** | 20 min | ~60 min | ~35 min ᵉ | ~100 min ᵉ | ~105 min |
 | **Tokens ¹** | 200K | 250K | ~350K ᵉ | ~600K ᵉ | 1.2M |
-| **Time ratio ²** | ~0.5× ᵉ | ~1.7× ᵉ | 1× | ~2.0× | ~2.9× |
+| **Time ratio ²** | ~0.5× ᵉ | ~1.7× ᵉ | 1× | ~2.7× | ~2.9× |
 | **Token ratio ²** | ~0.6× ᵉ | ~0.7× ᵉ | 1× | ~1.7× | ~3.6× |
 
-¹ Chase AI blog, April 2026 — simple projects, same model, per-session context tokens.
+¹ Chase AI blog (chaseai.io), April 2026 — simple projects, same model, per-session context tokens.
 ² The Gray Cat YouTube channel, May–June 2026 — full PRD builds, total API tokens across threads. Headline numbers: GSD 126M tokens vs OpenSpec 35.3M tokens (3.57× ratio); OpenSpec 35.4M tokens / 2.5h vs Spec Kit 59.8M tokens / 5h (1.69× tokens, 2× wall-clock).
 ᵉ Derived via GSD as the cross-dataset anchor (±40–50% — treat as directional, not precise). The roughest cells are OpenSpec and Spec Kit on the simple-website rows: they bridge context tokens (Chase AI) against total API tokens (Gray Cat), which are two different measurement units. The full-PRD ratios (² rows) are more reliable — both datasets count something close to total API tokens there, and the headline numbers above are within 5% of the cells.
 
@@ -128,7 +128,7 @@ There is no single dataset that covers all five frameworks on the same build. I 
 
 Two independent confirmations of the cells worth flagging:
 
-- **Jamie Telin, *IT Chronicles* (June 2026)** ran OpenSpec vs Spec Kit on GPT-5.2 across two test runs of a chat-support app. Spec Kit / OpenSpec token ratios: 2.09× (test 1: 120,947 vs 57,740) and 1.97× (test 2: 181,040 vs 91,729). Within 5% of the 1.69× cell. OpenSpec also used ~20% fewer assistant turns and ~25% fewer tool calls.
+- **Jamie Telin, *IT Chronicles* (June 2026)** ran OpenSpec vs Spec Kit on GPT-5.2 across two test runs of a chat-support app. Spec Kit / OpenSpec token ratios: 2.09× (test 1: 120,947 vs 57,740) and 1.97× (test 2: 181,040 vs 91,729) — about 16–24% above the 1.69× cell from Gray Cat, well within the ±40–50% uncertainty range the methodology already declares on the ᵉ cells. OpenSpec also used ~20% fewer assistant turns and ~25% fewer tool calls.
 - **Scott Logic review (cited in azanello.com SDD comparison, June 2026)** reports Spec Kit taking 3.5+ hours vs 23 minutes of iterative prompting for the same single feature. That places Spec Kit at ~9× native time, which is steeper than the ² row ratio (2.7×) — the gap is mostly because the Scott Logic feature is small enough that native's per-feature overhead is negligible.
 
 The caveats are real:
