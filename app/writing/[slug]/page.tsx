@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
 import { Container } from "@/components/Container";
 import { getAllPosts, getPost } from "@/lib/writing";
 
@@ -51,7 +52,14 @@ export default async function PostPage({
           {post.title}
         </h1>
         <div className="prose prose-lg mt-10 max-w-none">
-          <MDXRemote source={post.content} />
+          <MDXRemote
+            source={post.content}
+            options={{
+              mdxOptions: {
+                remarkPlugins: [remarkGfm],
+              },
+            }}
+          />
         </div>
       </article>
     </Container>
