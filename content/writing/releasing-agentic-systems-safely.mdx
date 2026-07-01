@@ -1,0 +1,75 @@
+---
+title: "Releasing agentic AI systems safely, and in an agile way"
+date: "2026-09-18"
+summary: "Why agentic systems break the normal release playbook — and how to ship them in small, reversible steps without a demo-to-production cliff."
+tags: ["agentic", "mlops", "production", "evaluation"]
+draft: true
+---
+
+{/* ROUGH DRAFT — general principles, no specific employer/product. Companion to "How to choose LLMs for a production agentic system" and maps to the §3.5 problem "our agent demos beautifully but breaks with real users." Maroš to review/edit. draft:false to publish. */}
+
+The most common thing I am called in for is an agent that demos beautifully and breaks with real users. The demo is not a lie — it genuinely worked. The problem is that the release model used to ship it is the one for ordinary software, and agentic systems violate three of its assumptions at once: the system takes actions, the actions compound, and the behaviour is not deterministic. You can ship one of those with the normal playbook. Not all three.
+
+## Why agentic breaks the normal playbook
+
+Three assumptions quietly fail:
+
+- **It acts.** A normal feature returns a value; an agent calls tools, writes to systems, sends things. A bad output is now a bad *action*, sometimes irreversible.
+- **It compounds.** A small per-step error rate over a ten-step loop is not a small end-to-end error rate. Reliability has to be reasoned about over the trajectory, not the call.
+- **It is non-deterministic.** "It worked when I ran it" is not evidence. The same input can produce a different path tomorrow, or on the next model version.
+
+So "safe release" for an agent is not "did the code deploy" — it is "have we bounded what this thing can do, and can we tell when it is doing it wrong, before it does it at scale."
+
+## Scope the authority before the capability
+
+The first release decision is not about quality. It is about blast radius. Before an agent ships, classify what it can do:
+
+- **Reversible, low-cost actions** (read, draft, suggest) — fine to let the agent do autonomously early.
+- **Reversible, high-cost actions** (bulk operations, anything noisy) — gate behind rate limits and monitoring.
+- **Irreversible actions** (send, pay, delete, externally-visible writes) — human-in-the-loop until the system has earned autonomy with evidence, not optimism.
+
+Most "agent went wrong in production" incidents are not model failures. They are authority failures: the agent did exactly what it decided, and nothing in the system was allowed to say no. Containment is an architecture decision you make before the first release, not a patch after the first incident.
+
+## The release gate is an eval, not a date
+
+Agentic systems need a gate that asks "is this version at least as good as the one in production, on cases that matter" — not "is it Thursday." Concretely:
+
+- A curated set of real, hard trajectories (not synthetic happy paths), graded on the outcome and the path.
+- An A/B or shadow comparison against the current production version. New version does not ship unless it does not regress.
+- The gate wired into the release path so the team that ships feels it. A gate nobody owns gets muted.
+
+"No regressions against production" is a better release contract than "hit a score" — it is harder to game and easier to defend when someone wants to ship on Friday.
+
+## Ship autonomy progressively, not in a big bang
+
+The agile version of an agent release is not "release the agent." It is releasing *increasing autonomy* in small, reversible increments:
+
+1. **Shadow.** The agent runs on real traffic and produces actions it does not take. You compare its proposed actions to what actually happened. Cheap, zero blast radius, enormously informative.
+2. **Suggest.** The agent's output is shown to a human who acts or discards. You are now measuring acceptance rate on real decisions.
+3. **Act with a human gate** on the irreversible subset.
+4. **Autonomous within bounds**, with monitoring and a kill switch, for the classes that have earned it.
+
+Each step is a small release with a real signal and a cheap rollback. That is what "agile" should mean for agents — not faster big-bang launches, but a graded path where every increment is independently reversible and independently informative.
+
+## Observability is per-step or it is nothing
+
+When an agent fails, "the agent gave a bad answer" is not a diagnosis. You need the trajectory: each step's input, the model call, the tool call and its result, the decision taken. If a production failure cannot be reconstructed step by step in a few minutes, you do not have a system you can safely operate — you have one you are hoping about. Tracing the loop is not an add-on; it is the precondition for being allowed to give the thing autonomy at all.
+
+## A kill switch and a rollback that have been used
+
+Two unglamorous requirements that are skipped until the incident:
+
+- **A kill switch** that disables the agent's ability to act (not just new sessions) without a deploy. Test it on purpose.
+- **A rollback** to the previous version that you have actually exercised, including any state the agent writes. A rollback you have never run is a hypothesis.
+
+If the answer to "how do we stop it right now" is a code change and a deploy, the system is not safe to run autonomously yet, regardless of how good the evals look.
+
+## What I tell teams
+
+- Decide what the agent is *allowed to do* before you tune how well it does it.
+- Make the release gate an eval against production, in the release path, owned by the shipping team.
+- Release autonomy in graded, reversible steps: shadow, suggest, gated act, bounded autonomy.
+- Trace every step, or do not grant autonomy.
+- Build and rehearse the kill switch and the rollback before they are needed.
+
+None of this slows you down in the way teams fear. It is what *lets* you move fast — every step is small and reversible, so you can ship continuously instead of staking the product on one big autonomous launch that you cannot take back.

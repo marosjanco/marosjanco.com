@@ -5,7 +5,9 @@ export const contentType = "image/png";
 export const alt = "Maroš Jančo — Senior AI Engineer";
 
 // Static OG image generated at build (spec §7.3). System font for offline-safe
-// builds; layout/colour match the site.
+// builds; layout/colour match the site. Content is centred (not left-aligned)
+// so it survives LinkedIn's centre-cropped square preview, which otherwise
+// slices off a left-aligned title.
 export default function OpengraphImage() {
   return new ImageResponse(
     (
@@ -16,6 +18,8 @@ export default function OpengraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
           background: "#fafaf7",
           color: "#1a1a1a",
           padding: "80px",

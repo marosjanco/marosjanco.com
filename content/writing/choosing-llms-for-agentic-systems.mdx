@@ -1,0 +1,73 @@
+---
+title: "How to choose LLMs for a production agentic system"
+date: "2026-07-10"
+summary: "Picking and optimizing models across providers for an agentic system — quality, latency, load, provider trade-offs, and a fallback that actually works."
+tags: ["agentic", "llm", "infrastructure", "cost", "mlops"]
+draft: true
+---
+
+{/* DRAFT — methodology only, general (not about any specific employer); no proprietary figures. Maroš to review/edit; set draft:false to publish. */}
+
+An agentic system makes the LLM-choice question sharper than a single-call product does. One agent run chains many model calls — planning, tool selection, extraction, synthesis — so a model that is a little slower, a little worse at instruction-following, or a little more expensive does not cost you that once; it compounds across every step of the loop. Picking and optimizing models across providers is an architectural decision here, not a procurement one.
+
+This is a methodology post, not a benchmark dump — partly on principle, and partly because anyone publishing model numbers in 2026 (cost per token, p95 latency, eval scores) is publishing data with roughly a six-month half-life. The numbers age out. The method does not.
+
+## Why single-provider is increasingly the wrong default
+
+A few years ago, committing entirely to one provider was defensible — capability gaps between them were large. That has changed:
+
+- Capability at the top tier has converged for most production tasks.
+- Per-token cost for similar quality varies by a meaningful multiple across providers.
+- Latency varies by provider, model, region, and time of day.
+- Provider incidents are not zero, and your uptime should not be capped by theirs.
+
+None of this argues for per-request adaptive routing — most teams do not need that and the complexity rarely pays for itself. It argues for one primary, one validated fallback, and the ability to switch without a rewrite. Multi-provider as resilience and leverage, not as a routing science project.
+
+## "Quality" means your tasks, not the leaderboard
+
+Public benchmarks measure capability on tasks you do not run. They are useful for a rough tier sort and almost nothing else. To choose a provider you need a small evaluation set built from your own workload — on the order of a few dozen cases, enough to discriminate, re-run on a schedule.
+
+The discipline that makes this trustworthy is the same as for any eval system: curate hard cases from real traffic, calibrate any model-graded scoring against humans, and re-run whenever a model changes underneath you. A provider comparison run on a weak eval set is worse than no comparison, because it produces a confident decision on noise. If you do not already have an eval set you trust, build that first — the provider question is downstream of it.
+
+## Cost is more variable than the price sheet
+
+The per-token price is the start of the cost analysis, not the end. For the same prompt and the same model class, the real bill differs across providers for non-obvious reasons:
+
+- default behaviours that change token counts,
+- retry and timeout policies,
+- whether prompt caching exists and how it is priced,
+- batch versus streaming pricing,
+- regional price differences.
+
+The only way to get a real number is to push representative production traffic through each option and read the invoice, not the estimate. A spreadsheet built from list prices will be wrong by a margin large enough to flip the decision — I have seen "obviously cheaper" options lose once caching and retry behaviour were included.
+
+## The case for a gateway even when direct is cheaper
+
+Going through a cloud gateway rather than a model vendor directly often looks marginally more expensive per token. It can still be the right call, because the price sheet does not capture:
+
+- compliance and audit trail,
+- data-residency control,
+- billing aggregation across models and teams,
+- regional failover.
+
+For a regulated or data-sensitive product, compliance posture is a real line item even though it never appears on the pricing page. "Cheaper per token, direct" can be more expensive once the compliance and integration work it pushes onto you is counted. Decide this with the total cost in view, not the token cost.
+
+## Test the fallback like you mean it
+
+The most common failure I see is a fallback that exists in config and has never served real traffic. When the primary degrades, that is the worst possible moment to discover the fallback's prompt formatting differs, its tokeniser counts differently, or its rate limits are lower than you assumed. Periodically route a slice of real traffic through the fallback and run it against the same eval set. A fallback you have not exercised is a story you tell yourself, not a capability you have.
+
+## The thin abstraction layer
+
+Put a small layer between your application and the provider so switching is a configuration change, not a refactor. Keep it thin on purpose — it should normalise the request and response shape and not much else. Heavy "LLM gateway" frameworks tend to abstract away exactly the provider-specific levers (caching, structured output modes, system-prompt handling) that you most need access to. The goal is swap-ability, not a lowest-common-denominator API.
+
+## What I actually recommend
+
+- Pick one primary and one fallback. Validate the fallback under load before you rely on it.
+- Keep a small, workload-specific eval set; re-run it on a cadence and whenever a model changes.
+- Measure real cost with real traffic, not list prices.
+- Keep the abstraction thin enough that provider-specific features are still reachable.
+- Do not over-engineer routing. Most teams need confidence that failover works, not per-request provider selection.
+
+## The honest caveat
+
+Any concrete cost, latency, or quality numbers in a post like this have a six-month half-life. Models reprice, new versions ship, latency profiles move. That is exactly why this post has no table of figures to screenshot. The durable artifact is the method: your own eval set, real-traffic cost measurement, a tested fallback, and a thin switching layer. Build that and the specific provider you pick this quarter stops being a high-stakes, hard-to-reverse decision — which is the actual goal.

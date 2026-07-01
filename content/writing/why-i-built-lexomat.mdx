@@ -1,0 +1,31 @@
+---
+title: "Why I built Lexomat"
+date: "2026-09-04"
+summary: "An AI legal-research assistant for Slovak law that only answers from official sources — the path that led to it and the problem it exists to fix."
+tags: ["lexomat", "legal-tech", "ai", "slovakia", "story"]
+draft: true
+---
+
+{/* ROUGH DRAFT — faithful English adaptation of Maroš's own Slovak origin text (kept your facts/voice; smoothed two garbled fragments). Verify: the food-app co-founding, the "behind neighbouring countries in rankings" claim, and that you're happy citing the US ChatGPT-sanction case via your link. draft:false to publish. This is the narrative/origin companion to "Why I solo-built Lexomat" (the engineering-decision piece). */}
+
+## The path to Lexomat
+
+My name is Maroš Jančo and I have worked with AI since 2016. I studied mathematics at Imperial College London and then machine learning at UCL. I have worked in banking and in several startups, and co-founded a food app. After a few formative years abroad and a glad return home, I started looking — in my own time — for a way to put that experience to use for my own country.
+
+Slovakia is struggling with innovation and with justice. We sit behind our neighbours in a lot of the related rankings, and in many sectors complex bureaucracy is the thing holding people back. One of the places where modern AI could genuinely help, I realised, is the everyday work of dealing with legal texts and legislation.
+
+As someone who works in data and is, frankly, an enthusiast about natural-language processing, I saw an obvious opening in putting AI and law together. So I talked to lawyers. They spend a large share of their time digging through statutes, tracking changes in regulations, and hunting for the relevant court decisions — and it is the part of the job they enjoy least. That is where the idea came from: a tool that takes that drudgery off their hands, and at the same time makes legal information more accessible to the public.
+
+## Why Lexomat exists
+
+Traditional legislative search is slow and tiring. Picture working through a complicated legal question: you end up with dozens of tabs open — acts, decrees, commentaries, court decisions. You lose the thread, and you run a real risk of missing the one detail that matters.
+
+General-purpose search engines and general AI chatbots make this worse, not better, because they will hand you imprecise or outright invented information. This is not hypothetical. In the US, a lawyer was sanctioned for submitting a court filing containing ChatGPT text that cited a case which did not exist ([reference](https://f.mtr.cool/qrfwbotfye)). For a professional, that is not an embarrassing edge case — it is a career risk baked into the tool.
+
+I built Lexomat to change that. The goal is for legal research to be simpler, faster, and reliable — and built only on official Slovak sources. In practice that means the answers you get are rooted in the legislation and case law actually in force in Slovakia, not in some incidental text scraped off the open internet. No more guessing whether a statute is still current, and no more wondering whether the AI "made something up": Lexomat always points back to the official paragraphs and the official documents.
+
+## The principle underneath it
+
+Everything else about Lexomat follows from one stance: when the cost of a confident wrong answer is a professional relying on it, the system is not allowed to guess. The model's job is to understand the question and identify what is relevant. Whether a source is real, current, and correctly cited is decided by the system against official sources — and the system is allowed to say "I can't verify this" rather than produce something plausible.
+
+That is the whole reason Lexomat exists: not "AI for law" as a slogan, but a legal-research assistant that earns a professional's trust by refusing to do the one thing that makes general AI dangerous in this domain.

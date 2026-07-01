@@ -1,0 +1,45 @@
+---
+title: "Disambiguating overlapping Slovak and Czechoslovak legal citations"
+date: "2026-08-21"
+summary: "A pre-1993 citation can belong to two legal lineages at once. Here's why that breaks naive AI legal tools and how Lexomat resolves it deterministically."
+tags: ["lexomat", "legal-tech", "rag", "engineering"]
+draft: true
+---
+
+{/* ROUGH DRAFT — niche but Google-discoverable; Lexomat is yours. Maroš: please sanity-check the legal-history specifics (federation split, citation-format claims) before publishing — I've kept them at a structural level but the dates/format details should be verified by you. draft:false to go live. */}
+
+This is a narrow post about a problem most people never hit, written for the few who will hit it hard: anyone building AI tooling over Slovak or Czech law. The short version is that a legal citation from before 1993 can legitimately belong to two legal lineages at once, and a system that does not resolve that ambiguity deterministically will be confidently wrong in a way users cannot see.
+
+## The setup
+
+Slovakia and the Czech Republic share a Czechoslovak past. After the federation split, both successor states carried forward parts of the federal legal corpus and then diverged. The practical consequence for tooling is that a citation written in a pre-split format does not, on its own, tell you which lineage it belongs to. The same act-number-and-year shape can resolve to a federal act, or to the Slovak continuation, or to the Czech continuation, depending on context the citation string does not contain.
+
+A lawyer reading the surrounding text disambiguates this without thinking about it, because they hold the context. A retrieval system, and a language model, do not — unless you give them a deterministic way to.
+
+## Why this breaks naive AI legal tools
+
+The naive pipeline is: user asks a question, retrieve relevant passages, let the model answer with citations. Every stage of that quietly mishandles the ambiguity:
+
+- **Retrieval** keyed on the citation string conflates documents from different lineages that share a citation shape, so the context window gets a mix and the model has no signal about which is authoritative for the question.
+- **The model**, asked to produce a citation, will emit a plausible one. Faced with an ambiguous reference it does not surface the ambiguity — it picks, confidently, and the wrong pick is indistinguishable from the right one in the output.
+- **The user** sees a clean citation to a real provision and has no way to know it resolved down the wrong lineage. As with hallucinated source URLs, the dangerous failure is not the broken citation — it is the plausible, wrong one.
+
+The deeper issue is the same one that shows up across production LLM work: an ambiguity that has a deterministic resolution rule is being resolved probabilistically, where the cost of a silent wrong answer is high.
+
+## The fix: resolve it in code, fail loudly
+
+Lexomat does not let the model resolve the lineage. The model identifies the citation; a resolution layer maps it to a concrete document. That layer:
+
+1. **Parses the citation into structured components** rather than treating it as a string — act number, year, version, paragraph, and any lineage markers actually present.
+2. **Applies explicit disambiguation rules.** Where a deterministic rule exists (the reference carries enough signal, or the surrounding query constrains the jurisdiction), it resolves to exactly one document and a verified source link.
+3. **Fails loudly when the reference is genuinely ambiguous.** This is the important part. If the citation cannot be resolved to a single lineage with confidence, the system says so rather than silently choosing. A surfaced "this reference is ambiguous between X and Y" is a correct, useful answer in a legal product. A confident wrong pick is not.
+
+This is the same architectural stance as not letting the model construct its own URLs: anything with a deterministic correct form is produced by code from structured model output, and the system is allowed — required — to refuse.
+
+## Why "just add more context" is not the answer
+
+The tempting shortcut is to stuff lineage hints into the prompt and few-shot the model through the ambiguous cases. It moves the error rate; it does not remove the error class. The ambiguity is rule-shaped, the rules are knowable, and the cost of a silent miss is a wrong legal citation in front of a professional. That combination is exactly when you take the decision out of the probabilistic component and put it in tested code with explicit cases — including a deliberate test suite of known-ambiguous references that must resolve to "ambiguous", not to a guess.
+
+## Why this is worth a post
+
+Most of this work is invisible when it succeeds: the citations are simply right, and the ambiguous ones are flagged instead of fabricated. It is also the kind of domain detail that does not generalise — and that is the point. Production AI in a specialised domain is mostly a stack of these. The model is the easy, generic part. The defensible product is the accumulated set of small, deterministic, domain-correct decisions around it that a generic system gets quietly wrong. Slovak/Czechoslovak citation disambiguation is one of mine; every serious vertical AI product has its own list.

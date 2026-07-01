@@ -1,0 +1,54 @@
+---
+title: "Building an end-to-end-encrypted AI companion"
+date: "2026-07-24"
+summary: "What 'end-to-end encrypted, including to the model' actually means when the model has to read the plaintext to answer — and the design choices Souli makes around that."
+tags: ["privacy", "encryption", "ai", "souli", "architecture"]
+draft: true
+---
+
+{/* ROUGH DRAFT — Souli is your open-source project so depth is fine, but I've kept the implementation claims at the architecture/threat-model level rather than asserting exact internals. Maroš: tighten against Souli's real design before publishing. draft:false to go live. */}
+
+Souli is an open-source AI companion that gamifies personal growth across the social, health, career, and personal sides of someone's life. The content people put into it is among the most sensitive there is. So the design constraint was non-negotiable from the start: chat content is end-to-end encrypted, including in transit to and from the model. This post is about the part everyone gets stuck on — *the model has to read the plaintext to answer you* — and what "end-to-end" can and cannot mean once you accept that.
+
+## The honest version of the problem
+
+There is a fantasy version of private AI where the model operates on ciphertext and never sees your data. With today's deployed systems, for a conversational product, that fantasy is not real. Fully homomorphic encryption and confidential-computing enclaves exist, but for an interactive companion at consumer latency and cost they are not where you build. So the honest engineering question is not "how do we never decrypt" — it is **where is the smallest possible plaintext boundary, who is inside it, and what does everyone outside it see?**
+
+If a privacy claim does not answer those three questions concretely, it is marketing. The goal of the architecture is to make the truthful answer a strong one.
+
+## What end-to-end has to mean here
+
+For Souli, "end-to-end encrypted, including to the model" means a specific, defensible claim: no party *between* the user's device and the model endpoint can read chat content. Concretely:
+
+- Content is encrypted on the client. Keys are derived on the client; the server stores ciphertext it cannot decrypt.
+- The application backend — the part I operate — is an untrusted relay for content. It routes, rate-limits, and bills, but it is outside the plaintext boundary. If my database is dumped, chat content is not in it in readable form.
+- The plaintext boundary is the user's device and the model inference endpoint, and the channel between them is encrypted in transit so intermediaries (including my own infrastructure) see ciphertext.
+
+What this does *not* claim, and should never be implied: that the model provider's inference process does not handle plaintext to generate a response. It does. The defensible, honest design minimises who that is, contractually constrains what they may do with it (no training, no retention), and removes everyone else — including me — from the set of parties who can read content.
+
+Stating that boundary plainly is itself a feature. Users of a journaling-adjacent product deserve to know exactly who can see what, and a privacy story that survives a careful reading is worth more than one that sounds total and collapses under one.
+
+## Where the engineering actually goes
+
+Most of the work is not the cryptography primitive — libsodium-style sealed boxes and modern AEAD are well understood. The work is everywhere the plaintext *almost* leaks:
+
+- **Metadata.** Even if content is ciphertext, message timing, frequency, lengths, and feature usage describe a person. Minimising and padding what the server learns matters as much as encrypting the body.
+- **Derived artifacts.** Gamified "growth" features want progress state, streaks, summaries. The naive implementation computes those server-side over plaintext and quietly reopens the boundary. They have to be computed inside the boundary or over data structures that do not reveal content.
+- **Key management.** End-to-end encryption is only as good as the recovery story. Lose the key, lose the data; make recovery too easy, and the recovery path becomes the weakest link and the real attack surface. This is the genuinely hard product decision, not a library call.
+- **Logs and crash reports.** The most common way "encrypted" products leak is an exception handler that serialises a request body into an error log. The boundary has to be enforced in the unglamorous code, not just the happy path.
+
+The recurring lesson: encryption is the easy 10%. Keeping plaintext out of every incidental place it wants to flow — logs, analytics, summaries, backups, error paths — is the other 90%, and it is an architecture and discipline problem, not a crypto problem.
+
+## Why open source
+
+Souli is open source because a privacy claim you cannot inspect is a request to take someone's word for it. The point of publishing the code is not adoption — it is that the threat model and the plaintext boundary are auditable rather than asserted. If the design is sound, scrutiny strengthens it. If it is not, I would rather find out from a reviewer than from an incident.
+
+## What is still hard
+
+I do not want to end this with a tidy bow, because the honest position is that some of this is unresolved at the ecosystem level:
+
+- True content-blind inference at interactive latency is not a solved consumer problem yet. Confidential computing is the most promising near-term path; it moves trust from "policy" to "hardware attestation", but it is operationally heavy.
+- Recovery versus zero-knowledge is a genuine trade-off, not a bug to be cleverly removed. Every design picks a point on it.
+- Provider guarantees are contractual, not cryptographic. That is a real limitation and the design should say so out loud rather than blur it.
+
+The contribution of a project like Souli is not "we solved private AI." It is a concrete, inspectable answer to *where the boundary is and who is inside it* — and a demonstration that you can build a useful AI companion while keeping that boundary small and honest. For this class of product, that is the bar worth holding, and most products do not hold it.

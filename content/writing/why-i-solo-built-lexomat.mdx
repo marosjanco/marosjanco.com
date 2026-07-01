@@ -1,0 +1,49 @@
+---
+title: "Why I solo-built Lexomat"
+date: "2026-08-07"
+summary: "Building an AI legal-research product for a regulated EU market on my own — what that bought me, what it cost, and when solo is the right call."
+tags: ["founder", "lexomat", "ai", "product"]
+draft: true
+---
+
+{/* ROUGH DRAFT — narrative/LinkedIn-friendly piece, Lexomat is yours so write freely. Maroš: adjust the personal framing to taste. draft:false to publish. */}
+
+Lexomat is an AI legal-research chat for Slovak and Czech law, used by legal professionals. I built it largely on my own — one contractor on delivery, the rest of product, design, AI, compliance, pricing, and infrastructure mine. People ask whether that was a constraint I was stuck with or a decision. It was a decision, and I would make it again for this specific product. Here is the actual reasoning, including where it hurt.
+
+## Solo is a strategy, not a fallback
+
+The default startup advice is to find a co-founder and hire early. For a lot of products that is right. For this one it was not, and the reason is specific: the hard part of Lexomat was not throughput, it was *judgment that had to be consistent across the whole stack*.
+
+A legal-AI product fails on subtle wrongness — a citation that resolves to the wrong provision, an answer that is confidently incomplete, a UX affordance that implies more certainty than the system has. Those failures do not live in one layer. They are decisions that span the prompt, the retrieval, the citation resolution, the UI copy, and the pricing of how much verification work you are implicitly asking the user to do. When one person holds all of those, the product has a single coherent stance on its own trustworthiness. When five people hold them, you spend most of your time negotiating that stance into alignment. Early on, with no users yet telling you which trade-offs were right, that negotiation is mostly noise.
+
+Solo bought *coherence per unit time*. Every decision was made with the whole system in view, fast, by someone who would also feel the consequence.
+
+## What it actually cost
+
+I want to be precise here, because "solo founder" is romanticised and it should not be.
+
+- **No division of cognitive load.** The cost is not hours; it is that you are the bottleneck on every category of problem at once — a GDPR question, a retrieval bug, and a pricing decision in the same afternoon, with no one to hand any of them to.
+- **No second opinion by default.** With a co-founder, disagreement is built in. Solo, you have to manufacture it deliberately or you will ship your own blind spots. I had to build the habit of arguing against myself in writing, which is slower than just having another person do it.
+- **Slower on genuinely parallel work.** Some work is embarrassingly parallel and solo is simply slower at it. The trick is recognising which work that is and either sequencing it or buying it (the one contractor was exactly this — delivery work that did not need my judgment).
+
+If the hard part of your product *is* throughput or breadth, solo is the wrong call and these costs dominate. For Lexomat the hard part was coherence under uncertainty, so the costs were real but not decisive.
+
+## The regulated-market angle
+
+A regulated EU market changes the maths. GDPR, the accuracy bar for a professional tool, the citation-verification story — these are not features you bolt on, they are constraints that shape the architecture from the first commit. Decisions like *the model never constructs its own source URLs, the backend resolves them from a verified index* are compliance, product, and engineering decisions simultaneously. Holding all three perspectives in one head removed an entire category of cross-functional translation that, for a small product in a regulated space, is pure overhead.
+
+Solo did not make the regulatory work easier. It made the *coordination around* the regulatory work nearly free, which for a one-product company is most of the cost.
+
+## What made it tractable
+
+Solo only works if you aggressively narrow scope and lean on the parts of the stack you actually know.
+
+- **Ruthless surface-area control.** Every feature that did not serve the core "trustworthy answer with a checkable citation" loop was deferred. Solo founders die from surface area, not from competition.
+- **Buying delivery, keeping judgment.** The one contractor handled work that did not require holding the product's stance. Anything that did stayed with me. That line — judgment in, delivery out — is the one that makes solo viable.
+- **Building on prior depth.** I did not learn production AI on Lexomat. The reason one person could own prompt-to-production here is that prompt-to-production was already the thing I do. Solo is leveraged expertise, not heroics; without the depth it is just a slow team of one.
+
+## When solo is the right call
+
+The honest generalisation: solo is right when the dominant difficulty of the product is *coherent judgment under uncertainty* and you personally have the depth to hold the whole stack. It is the wrong call when the dominant difficulty is throughput, breadth, distribution, or a domain you do not yet own — there, the coordination cost you avoid is smaller than the capability you lack.
+
+Lexomat sat squarely in the first case. The product needed one consistent answer to "how much should a user trust this, and what do we do to earn it" — and the fastest way to get one consistent answer was for one person to own the question end to end. That is the whole reason, and it is not a romantic one.

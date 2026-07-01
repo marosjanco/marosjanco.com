@@ -15,49 +15,55 @@ draft: true
 Most discussions collapse three different things into "evals":
 
 1. **Regression testing** — catch breakage between releases.
-2. **Prompt iteration** — compare prompt or model A against B on a held-out set.
+2. **Prompt and model iteration** — compare A against B on a held-out set.
 3. **Production monitoring** — sample live traffic to catch drift after release.
 
-These need different datasets, different judge prompts, and different alerting. A regression suite wants stable, curated cases and a binary pass/fail gate. Iteration wants discriminating cases where A and B actually differ. Monitoring wants a representative sample of live traffic and trend lines, not a gate. Trying to serve all three with one setup produces something mediocre at all three. Decide which job a given eval is for before you build it.
+These need different datasets, different judge prompts, and different alerting. A regression suite wants stable, curated cases and a binary gate. Iteration wants discriminating cases where A and B actually diverge — cases everything passes are noise. Monitoring wants a representative sample of live traffic and trend lines, not a pass/fail. Build one system and point it at all three and you get something mediocre at each. Decide which job a given eval serves before you build it, and accept that you will end up with more than one.
 
 ## The dataset problem
 
 Synthetic data is cheap and misleading. It tests the cases you imagined, which are rarely the cases that break. The only reliable source of hard cases is real production traffic.
 
-The cycle that works: ship something, collect traces, find the ones that surfaced a real problem, curate those into the eval set. The step almost everyone skips is curation. Without it you accumulate easy cases and your green dashboard means nothing. A small, deliberately curated set of genuinely hard cases is worth far more than a large set of convenient ones.
+The cycle that works: ship something, collect traces, find the ones that surfaced a real problem, curate those into the eval set. The step almost everyone skips is curation. Without it you accumulate easy cases, your dashboard goes green, and the green means nothing. A small, deliberately curated set of genuinely hard cases is worth far more than a large set of convenient ones — fifty cases that each once represented a real failure beat a thousand generated ones.
+
+Curation also has to be ongoing. The failure modes that mattered six months ago are mostly fixed; the set has to keep absorbing the new ones or it slowly stops describing your actual risk.
 
 ## The judge-calibration problem
 
-A judge that agrees with humans 70% of the time is worse than no judge, because it manufactures confidence in wrong conclusions. You have to measure judge-versus-human agreement explicitly, treat it as a number you track, and re-measure it on a schedule — especially when a model underneath the judge changes, because that silently shifts its behaviour.
+A judge that agrees with humans 70% of the time is worse than no judge, because it manufactures confidence in wrong conclusions. You have to measure judge-versus-human agreement explicitly, treat it as a tracked number, and re-measure it on a schedule — particularly when a model underneath the judge changes, because that silently shifts its behaviour.
 
-Most teams write the judge prompt once and never re-measure. Then a provider updates a model, the judge's grading drifts, and the eval system keeps reporting green while quality moves. Calibration is not a one-time setup step; it is a maintenance obligation.
+Most teams write the judge prompt once and never re-measure. Then a provider updates a model, the judge's grading drifts, and the system keeps reporting green while quality moves underneath it. Calibration is not a setup step; it is a maintenance obligation, and the agreement number belongs on the same dashboard as the scores it underwrites.
+
+A practical note: measure agreement on the *hard* cases, not a random sample. A judge can be 95% aligned on easy cases and near-random on the ambiguous ones that are the entire reason you built the eval.
 
 ## The cost problem
 
-Run a few-hundred-item eval with a frontier-class judge on every pull request and the CI bill climbs fast — sometimes faster than anyone is watching for. The usual levers, with honest trade-offs:
+Run a few-hundred-item eval with a frontier-class judge on every pull request and the bill climbs fast — sometimes faster than anyone is watching for. The usual levers, with honest trade-offs:
 
-- **Smaller judge models** — cheaper, with a measured accuracy cost you should quantify, not assume.
-- **Tiered runs** — a small subset per pull request, the full suite nightly.
-- **Result caching** — key eval results by a fingerprint of prompt plus model plus input, so unchanged paths are not re-graded.
+- **Smaller judge models** — cheaper, with a measured accuracy cost you should quantify rather than assume.
+- **Tiered runs** — a small discriminating subset per pull request, the full suite nightly.
+- **Result caching** — key results by a fingerprint of prompt + model + input, so unchanged paths are not re-graded.
 
-A hybrid of these is usually the right answer. The point is to make the cost deliberate rather than discovered in a monthly invoice.
+A hybrid of these is usually right. The point is to make the cost a deliberate decision rather than something discovered on an invoice.
 
 ## The diagnosability problem
 
-When an eval fails, the team needs to see the trace immediately: the exact input, the prompt that was used, the model output, and the judge's stated reasoning. If reproducing a failure takes an afternoon, the eval system will be ignored under deadline pressure, which is exactly when it matters. Whatever tracing or observability layer you use, the bar is: a failed eval is diagnosable in a few minutes, by someone who did not write it.
+When an eval fails, the team needs the trace immediately: the exact input, the prompt used, the model output, the judge's stated reasoning. If reproducing a failure takes an afternoon, the eval system gets ignored under deadline pressure — which is exactly when it matters most. Whatever observability layer you use, the bar is concrete: a failed eval is diagnosable in a few minutes by someone who did not write it. Score-only eval systems that cannot show you *why* something failed do not change behaviour; they just generate anxiety.
 
 ## The incentive problem
 
-This is the one least often discussed and most often fatal. An eval system only works if the people who benefit from it also feel its cost. If evals run somewhere off to the side and block nothing, they rot. Wire the eval into the release gate so the team that ships is the team that sees the failure and pays the few minutes to triage it. Evals that gate releases get maintained. Evals that produce a dashboard nobody owns do not.
+This is the one least discussed and most often fatal. An eval system only works if the people who benefit from it also feel its cost. If evals run off to the side and block nothing, they rot. Wire the eval into the release path so the team that ships is the team that sees the failure and pays the few minutes to triage it. Evals that gate releases get maintained. Evals that produce a dashboard nobody owns get muted, then deleted.
+
+An A/B-style gate works well here: a release does not go out unless it is at least as good as the current production version on the curated set. That framing — "no regressions" rather than "hit a score" — is easier to defend and harder to game.
 
 ## What I would tell a team starting from zero
 
 - Build a small eval system early. Twenty hand-curated cases that gate releases beat two hundred synthetic ones that gate nothing.
-- Do not chase perfect judge calibration on day one. Measure agreement, write down the number, improve it on a cadence.
+- Do not chase perfect calibration on day one. Measure agreement, write the number down, improve it on a cadence.
 - Put it in the release path from the start, so the cost lands on the team that benefits.
 - Re-measure judge-human agreement on a schedule, and again whenever a model underneath you changes.
-- Treat the curated dataset as the asset. Models and prompts churn; a well-curated set of hard cases compounds.
+- Treat the curated dataset as the durable asset. Models and prompts churn; a well-curated set of hard cases compounds and is the thing worth protecting.
 
 ## Closing
 
-The LLM-as-judge recipe is not the hard part — it is a weekend's work to stand up. The hard part is the operating discipline around it: curated data, calibrated and re-calibrated judges, deliberate cost, fast diagnosis, and incentives that keep it alive. Teams that ask me for "an evaluation framework" usually have the recipe and are missing the discipline. The framework is cheap. The discipline is the product.
+The LLM-as-judge recipe is not the hard part — it is a weekend's work to stand up. The hard part is the operating discipline around it: curated data, calibrated and re-calibrated judges, deliberate cost, fast diagnosis, and incentives that keep it alive. Teams that ask for "an evaluation framework" usually have the recipe and are missing the discipline. The framework is cheap. The discipline is the product.
