@@ -40,7 +40,7 @@ Karpathy's most important structural rule: three roles, three context windows, t
 
 Mixing these roles is the most common failure mode. The moment a model evaluates its own output, it becomes sycophantic and the loop quietly converges on slop.
 
-GSD — the structured agentic development methodology I use — formalises this split operationally. `/gsd-plan-phase` produces a `PLAN.md` before any code is written. `/gsd-execute-phase` builds against it in a fresh context window. `/gsd-verify-work` checks whether the goal was achieved, not just whether the tasks were completed. Three separate agents, three separate system prompts, no shared context except the plan file on disk.
+Several frameworks embed this planner–builder–evaluator split operationally — GSD, Superpowers, OpenSpec, Spec Kit — each with a different opinion about how much ceremony the planner and evaluator should bring. Lexomat uses GSD: `/gsd-plan-phase` produces a `PLAN.md` before any code is written, `/gsd-execute-phase` builds against it in a fresh context window, `/gsd-verify-work` checks whether the goal was achieved rather than whether the tasks were completed. Three separate agents, three separate system prompts, no shared context except the plan file on disk. The trade-offs — cost, time, repo baseline, when each one is the right tool — are in the companion post.
 
 ### III. Negotiate testable contracts before writing code — through dialogue, not solo
 
