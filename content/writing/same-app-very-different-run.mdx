@@ -3,7 +3,7 @@ title: "Same app. Very different run."
 date: "2026-07-01"
 summary: "Build the same app five times — once under each framework — and watch the cost, the time, and the codebase drift apart. A head-to-head of Claude Code native, Superpowers, OpenSpec, Spec Kit, and GSD, with the methodology honestly disclosed."
 tags: ["agentic", "engineering", "llm", "claude", "ai-development", "gsd", "superpowers", "openspec", "spec-kit", "comparison"]
-draft: true
+draft: false
 ---
 
 Same app, five frameworks, five very different runs.
@@ -66,7 +66,7 @@ The same app, the same model, the same goal. What actually differs across runs:
 | **Token cost (relative)** | 0.6× | 0.7× | 1× | 1.7× | 3.6× |
 | **Time cost (relative)** | 0.5× | 1.7× | 1× | 2.7× | 2.9× |
 | **Repo baseline** | Whatever you ask for | Tests via TDD Iron Law | Specs as docs | Constitution + specs | Tests, typecheck, config |
-| **Best fit** | Bug fix, <3 files | Discipline is the risk | Brownfield iteration | Greenfield with opinion | Greenfield + coordination risk |
+| **Best fit** | Bug fix, &lt;3 files | Discipline is the risk | Brownfield iteration | Greenfield with opinion | Greenfield + coordination risk |
 
 The column on the right — repo baseline — is the one that does not show up in browser screenshots but pays off on day two. GSD reliably produces tests, typecheck scripts, and configuration hygiene; lighter tools produce them only if you explicitly ask, and the agent will sometimes quietly skip them under time pressure.
 
