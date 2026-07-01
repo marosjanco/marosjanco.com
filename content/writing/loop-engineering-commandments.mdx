@@ -1,185 +1,143 @@
 ---
-title: "Stop Prompting. Start Engineering Loops."
+title: "The Loop Engineering Commandments"
 date: "2026-06-30"
-summary: "Loop engineering is not about prompting agents better. It is about designing systems where agents can build, verify, fail, restart, and improve without constant human supervision. Ten rules from building Lexomat — a full-stack legal AI — in production."
+summary: "Prompting gives answers. Loops ship work. Ten commandments from building Lexomat — a full-stack legal AI — in production."
 tags: ["agentic", "engineering", "llm", "claude", "ai-development", "loops", "gsd"]
 draft: false
 ---
 
-Loop engineering is the difference between asking an agent to do work and designing a system where the agent can finish work.
+Prompting gives answers. Loops ship work.
 
-The phrase is new. The practice is not. Anyone who has spent serious time building with coding agents has already felt the shift. The useful unit is no longer the prompt. It is the loop: define the goal, build, verify, fail, repair, restart, and repeat until the result survives contact with tests, reviewers, and users.
+That is the core shift behind agentic coding.
 
-That distinction matters. A prompt produces an answer. A loop produces progress.
+Most people still treat AI coding agents as smarter autocomplete: ask for a function, get a patch, review the output, repeat. That is useful, but it is not the real unlock.
 
-This became obvious while building Lexomat, a full-stack legal AI. Across enough real features, the same patterns kept appearing. Agents failed less because they were given better wording and more because they were placed inside better systems. The highest-leverage work was not making prompts longer. It was separating planning from building, making verification adversarial, writing state to disk, defining contracts before implementation, and deciding when a human should intervene.
+The unlock is loop engineering.
 
-This essay is a synthesis of three sources: Karpathy's LOOPS.md, Andrew Ng's three-loop framework, and what I learned shipping agent-built features in Lexomat. The principles below are not abstract best practices. Each one cost something to learn.
+A prompt is a single instruction. A loop is a system: define the goal, build, verify, fail, repair, restart, and repeat until the work survives contact with tests, reviewers, and users.
 
-![Google Trends for "loop engineering" — exponential growth through 2026, with a notable upward curve already in 2025](/writing/loop-engineering-google-trends.png)
+After building Lexomat, a full-stack legal AI product, across enough real features to see the same patterns repeat, these are the commandments I now use for agentic building.
 
-## Three loops at three timescales
+![The 10 loop-engineering commandments](/writing/loop-engineering-ten-commandments.jpeg)
 
-Andrew Ng's framework is the right starting point. Three loops, nested at different timescales:
+1. Write the loop, not the prompt
 
-![Andrew Ng's three-loop framework: agentic coding loop (minutes, the agent alone), developer feedback loop (hours, the human reviewing and steering), and external feedback loop (days to weeks, real users and data reshaping the product vision)](/writing/andrew-ng-three-loops.jpeg)
+The question is not "what should I ask the agent?"
 
-- **Agentic coding loop** (minutes): the agent writes code, runs tests, verifies its own output in a browser or against an eval set, and iterates. The human is not in this loop at all.
-- **Developer feedback loop** (hours): you review what was built, make higher-level decisions about direction, and give new instructions.
-- **External feedback loop** (days to weeks): real users, alpha testers, A/B tests — data that reshapes the product vision.
+The better question is: "what loop will let the agent verify its own work?"
 
-## The loop must close without you
+An agent that can write code but cannot test, inspect, or evaluate it is only doing half the job. The human becomes the verification layer, which means the loop never really closes.
 
-Most people think "using an AI coding agent" means occasionally asking it to write a function. That is prompting, not loop engineering. The difference is whether the agent can close its own inner loop — build, verify, fix, repeat — without you. That is the prerequisite for everything that follows.
+The goal is to design workflows where the agent can build, check, fail, fix, and retry without needing you every five minutes.
 
-## Ten loop-engineering commandments
+2. Separate planner, builder, and evaluator
 
-A combination of Karpathy's LOOPS.md, Andrew Ng's three-loop framework, and what I learned building Lexomat. None of this is invented — it is observed and credited.
+The planner should turn vague goals into a concrete spec.
 
-### I. Write the loop, not the prompt
+The builder should implement against that spec.
 
-A prompt is a thing you type once and forget. A loop is a procedure: gather, reason, act, verify, repeat. Karpathy puts it plainly: "If you find yourself iterating on a single message at three in the morning, you are still in the prompting era. Close the tab. Write the loop."
+The evaluator should assume the work is broken and try to prove it.
 
-The practical question is always: what is the verify step? An agent that builds but cannot verify its own output is doing half the work and leaving the other half to you. In Lexomat, the inner-loop verify step is `/ck` — four parallel agents running simultaneously: a code reviewer, a test runner, a test-coverage assessor, and a peer reviewer. They are adversarial by design.
+Mixing these roles is one of the fastest ways to produce slop. When the same agent writes and grades its own work, it becomes too forgiving. Separate roles create tension, and that tension improves the output.
 
-### II. Separate the planner, the builder, and the evaluator
+3. Define the contract before code
 
-Karpathy's most important structural rule: three roles, three context windows, three system prompts. The planner turns a vague goal into a testable spec and never touches code. The builder writes everything and is explicitly forbidden from grading its own work. The evaluator reads diffs, launches tests, and is told from its first message that the code is broken — its job is to prove it.
+Before the builder writes a single line, define what "done" means.
 
-Mixing these roles is the most common failure mode. The moment a model evaluates its own output, it becomes sycophantic and the loop quietly converges on slop.
+Not in vague language.
 
-Several frameworks embed this planner–builder–evaluator split operationally — GSD, Superpowers, OpenSpec, Spec Kit — each with a different opinion about how much ceremony the planner and evaluator should bring. Lexomat uses GSD: `/gsd-plan-phase` produces a `PLAN.md` before any code is written, `/gsd-execute-phase` builds against it in a fresh context window, `/gsd-verify-work` checks whether the goal was achieved rather than whether the tasks were completed. Three separate agents, three separate system prompts, no shared context except the plan file on disk.
+Not "the login should work."
 
-### III. Define the contract before code
+A real contract says what happens for invalid credentials, expired sessions, missing tokens, valid sessions, edge cases, and regressions. It gives the evaluator something concrete to test.
 
-Before the builder writes a single line, the planner and evaluator should agree on what done looks like — in testable assertions, not vague descriptions. Ten criteria is usually too few, because the evaluator rubber-stamps when the bar is too easy to clear. Dozens is the right order of magnitude for a feature that matters.
+The quality of the build is usually decided before the build starts.
 
-The contract is what gets graded. A spec that says "the user should be able to log in" is not a contract. A contract says: given an unauthenticated POST to `/sessions`, the API returns 401; given a valid JWT, it returns a session object with these exact fields. Dozens of those, and the evaluator has something to push against.
+4. Write state to disk
 
-The quality of the contract depends entirely on the quality of the questions asked before writing it. The planner's job is not to draft the contract — it is to ask the human six to eight targeted questions first: what does the user see today that's wrong, what must they see after, what edge cases matter, what must not break, what is explicitly out of scope. Only when the answers are specific enough to write a falsifiable assertion does contract-writing begin. Writing a contract solo, from the issue description alone, produces a contract that reflects the issue author's assumptions, not the actual goal. The Socratic step is not optional overhead — it is how you find out what you are actually building before you build it.
+Context windows drift. Files do not.
 
-The same principle applies to debugging: write the failing test that proves the bug exists, then ask the agent to fix it, then confirm the test passes. Not "fix until it feels done." Without the test, the agent fixes the symptom it can see and the loop terminates on vibes. With it, done is defined, the evaluator has something concrete to push against, and the fix cannot regress silently later.
+Long-running agent sessions need persistent state outside the chat: plans, verification notes, architectural rules, progress logs, and decisions.
 
-### IV. Keep the harness short and persistent
+In Lexomat, this means files like CLAUDE.md, PLAN.md, VERIFICATION.md, and STATE.md. They act as long-term memory that survives context resets and prevents the agent from quietly losing the plot.
 
-Context windows lie. They compact, they rot, they hide what was said an hour ago behind a summary that was never written. A file on disk does not lie.
+If the state matters, write it down.
 
-This is why `CLAUDE.md` exists in Lexomat: it is the harness — the persistent state that survives context resets. It describes the codebase layout, architectural invariants, workflow rules, and non-negotiables. Every agent that touches this codebase reads it first. GSD enforces the same principle through canonical artifacts: `PLAN.md`, `VERIFICATION.md`, `STATE.md`. These files are the agent's long-term memory. They are what lets a session crash at iteration nine and ship a working version at iteration eleven.
+5. Make verification adversarial
 
-The rule Karpathy gives: keep the state in three files. If you cannot describe your system's current state in three files, the state is too complicated.
+A soft evaluator finds soft bugs.
 
-One failure mode worth naming separately: *context drift*, which is more dangerous than context overflow. Overflow is obvious — the session errors out. Drift is silent: the agent still responds coherently but has quietly lost the original intent from earlier in the session and starts fabricating architectural alignment it no longer has. The fix is the same as the general principle — write state to disk, keep sessions short, and make the first act of each new session reading the progress file and git log, not re-exploring the codebase from scratch.
+A good evaluator starts with the assumption that the code is broken. Its job is not to admire the implementation. Its job is to attack it.
 
-The harness is a living artifact. Karpathy's most underrated rule: delete the harness. "The harness that grows monotonically is a harness you have stopped reading." Every instruction in the harness is dead weight the moment the model does the thing for free. Re-read the harness against every major model release and cut what is no longer load-bearing.
+Run tests. Read diffs. Look for missing coverage. Check edge cases. Ask what could regress. Treat independent reviewers that converge on the same issue as a serious signal.
 
-`CLAUDE.md` in Lexomat is much shorter than it was a year ago. The rules that remain are the ones where the model reliably fails without them: Supabase security rules, the migration-only-via-CLI rule, the `/ck` requirement on every PR, the color system invariants. Everything else has been deleted. The file is shorter and more powerful for it.
+The evaluator should not be polite. It should be useful.
 
-There is also a hard practical ceiling: frontier models have roughly 150–200 effective instruction slots in a system prompt. Beyond that, instructions get silently deprioritised regardless of how clearly they are written. If your harness has grown past that, the later rules are not being followed — they are being ignored. Offload specifics to scoped rules files with path globs (`.claude/rules/*.md`), keeping the main harness as the invariants and the philosophy, not the exhaustive list.
+6. Keep the harness short
 
-### V. Make the evaluator adversarial
+Your agent harness should be a living artifact, not a junk drawer.
 
-The evaluator told "this code might be fine" finds nothing. The evaluator told "this code is broken — prove it" finds things. This is not a prompt trick. It is the correct epistemic framing: in software, the null hypothesis is always that there is a bug.
+Every permanent instruction has a cost. If the model now handles something reliably without being told, delete the rule. Keep only the invariants that still matter.
 
-In `/ck`, the four agents run in parallel with no coordination between them. Independent findings that converge are facts; a single agent finding something is a signal. The adversarial framing also prevents the most dangerous failure: the evaluator that gets socially influenced by the quality of the code it is reading and grades what it expected rather than what it found.
+A short harness that the agent actually follows is better than a long harness full of ignored rules.
 
-### VI. Let the loop restart; humans intervene on wrong contracts, not wrong builds
+7. Let bad iterations die
 
-Counterintuitively, the best behavior from a frontier model is willingness to throw everything away and start over. An agent that patches and patches until the codebase resembles archaeology is worse than one that scraps iteration nine and ships a clean version at eleven.
+The best agents are willing to restart.
 
-The rule for human intervention: insert yourself when the *contract* is wrong, not when the *build* is wrong. If the agent is building toward the wrong goal, intervene. If it is struggling with a build problem, wait. A restart is the loop working correctly. The loop is broken only when the contract is wrong and no human is there to fix it.
+That is a feature, not a failure.
 
-### VII. Match your review cadence to the loop timescale
+Patching a bad direction forever creates archaeological code: layers of fixes over a flawed foundation. Sometimes the cleanest path is to throw away iteration nine and ship iteration eleven.
 
-Ng's developer feedback loop runs over tens of minutes to hours. That is the right granularity: long enough for the agent to have done something meaningful, short enough to catch wrong directions before they compound.
+The human should intervene when the contract is wrong, not every time the build struggles.
 
-Checking in every five minutes makes you the bottleneck and prevents the inner loop from ever closing properly. Checking in every two days means the agent builds a lot of wrong things before it gets corrected. For Lexomat, I check in roughly every 90 minutes when building a new feature — usually two or three inner-loop iterations, enough for real progress and enough for me to give substantive feedback rather than micromanagement.
+8. Review at the right cadence
 
-### VIII. The bottleneck always moves — find the current one
+Review too often and you become the bottleneck.
 
-Karpathy: "When coding stops being the bottleneck, planning becomes the bottleneck. When planning is solved, verification becomes the bottleneck. When verification is automated, taste becomes the bottleneck."
+Review too rarely and the agent compounds the wrong direction.
 
-For Lexomat, there was a fourth phase after taste: *domain correctness*. Once the coding, planning, and verification loops were solid, the bottleneck became whether the legal AI was actually right about Slovak law. That is a bottleneck the agent cannot close alone — it requires domain expertise that only a legal expert carries.
+The developer feedback loop should run over meaningful chunks of work: long enough for the agent to complete real inner-loop iterations, short enough for the human to correct direction before the cost grows.
 
-The whole point of the loop is to make the *next* bottleneck visible. If everything is going smoothly, you are not looking carefully enough. Identify the current bottleneck and work on it exclusively. Ignore everything else until it moves.
+For me, that usually means reviewing after the agent has had time to produce something substantive, not after every tiny step.
 
-### IX. Scope one problem per context, triage before building
+9. Follow the bottleneck
 
-Two rules that look different but live in the same place. Both are about keeping the inner loop tight.
+When coding stops being the bottleneck, planning becomes the bottleneck.
 
-When problem B surfaces while you are solving problem A, open a GitHub issue for B and return to A. Do not bundle them. Solving B inline feels efficient — it is right there, you can see it, fixing it takes five minutes. But now the agent is holding two problem models simultaneously, the diff contains two unrelated concerns, the PR is harder to review and harder to revert precisely, and if B turns out to be wrong it drags A down with it. Filing B as an issue is not deferral — it is a cognitive dump that lets the agent genuinely drop B and stay focused on A. In all three cases — pre-existing bug, newly surfaced, adjacent improvement — the action is the same: `gh issue create`, link it from the PR description, move on.
+When planning improves, verification becomes the bottleneck.
 
-The other half is triage. Before writing a single line of code on any issue, re-read it against the current codebase. Check the lines cited. Check merged PRs in the same area over the past two weeks. The bug may no longer exist. The refactor may target code that was removed last month. The feature request may have been superseded by a different decision. The triage cost is minutes. The cost of solving a non-problem — building, reviewing, merging, and later reverting — is hours and main-branch noise. A clean one-paragraph close comment explaining why and under what conditions to reopen is a better outcome than an unnecessary PR.
+When verification improves, taste becomes the bottleneck.
 
-### X. Score the subjective before you need the agent to match your taste
+In domain-heavy products, another bottleneck appears: correctness. For Lexomat, the hard question eventually became whether the product was actually right about Slovak law.
 
-Taste is gradable if you write it down. Design, originality, craft, functionality — calibrated against three reference examples you call good and three you call slop. If your aesthetic rubric is not in the harness, the agent converges on its training-data average, not yours.
+The point of better loops is not to remove bottlenecks forever. It is to make the next bottleneck visible.
 
-In Lexomat this meant writing precise color system rules into `CLAUDE.md` before any UI work started: semantic CSS variables only (`text-content-secondary`, never `text-gray-600`), 44×44px minimum touch targets, no hardcoded Tailwind colors. Vague guidance like "the UI should feel clean" produces nothing. A rubric with three reference sites and four weighted axes produces something you can actually push against.
+10. One problem per context
 
-The corollary: if the agent consistently produces UI you are unhappy with, the problem is almost never the model. It is an unwritten rubric.
+When problem B appears while solving problem A, file it. Do not fix it inline.
 
-## A feature, start to finish
+This feels slower. It is usually faster.
 
-A typical Lexomat feature moves through five stages. Each one has a failure mode attached to it that taught me the rule above it.
+Bundling unrelated problems pollutes the context, complicates the diff, makes review harder, and makes rollback riskier.
 
-**Route first.** Bug fix in one service, multi-file feature with discipline risk, or greenfield with ambiguous scope? The decision takes thirty seconds. Get it wrong and the rest of the loop is wasted effort.
+One problem. One contract. One context. One clean loop.
 
-**Contract before code.** Ask six to eight targeted questions, draft the contract, get explicit approval, then start the build. An early version of the Lexomat contract template was drafted from the issue description alone — a login feature got a contract that read "the user can log in". It missed the CSRF edge case because the issue didn't mention CSRF. The build passed the contract. Production did not. Fixing it took a full session that would not have been needed if the Socratic step had been run. The rule exists because of that class of failure.
+The real skill is not prompting
 
-**Build against the contract.** Write the failing test first, implement to green, confirm per criterion. The build agent treats the contract as the spec — it does not re-decide what done looks like mid-build.
+The biggest misconception about agentic coding is that success comes from clever wording.
 
-**Verify adversarially.** `/ck` runs four parallel agents over the diff — code reviewer, test runner, mutation tester, fresh-eyes peer reviewer. Independent findings that converge are facts. Anything else is a signal.
+It does not.
 
-**Review and merge or steer.** I read `/ck`'s output and either ship the PR or send it back. A wrong contract is the only thing I intervene on mid-build; wrong builds are the agent's problem to solve.
+The real skill is designing the system around the agent:
 
-One more failure mode, this one at triage: an issue referenced line numbers that had been removed in a recent refactor. The triage check was skipped. The agent "fixed" the non-bug at the cited lines, the diff polluted main, and the revert took longer than the original fix would have. Triage is not overhead. It is the cheapest insurance against the most expensive kind of work — solving a problem that no longer exists.
+a planner that asks the right questions,
+a builder that works against a testable contract,
+an evaluator that assumes the work is broken,
+persistent state that survives context loss,
+and a human who knows when to steer instead of micromanage.
 
-Total elapsed time from brief to merged PR on a medium feature: two to four hours. Time I spend actively working: twenty to forty minutes. Any problem B that surfaces becomes a filed issue, not a detour.
+That is loop engineering.
 
-## Routing: which framework, when
+Prompting gives answers.
 
-The frameworks that show up in this conversation — Claude Code native, Superpowers, OpenSpec, Spec Kit, GSD — solve different problems and come at very different costs. The decision is not which one is best. It is which one is appropriate for this task.
-
-Three tools solve three distinct problems. **Claude Code native** (plan + execute in the same context window) solves the *capability* problem: the agent can write and run code. No extra discipline, no context isolation. Fast, cheap — around 200K tokens and twenty minutes for a small feature — sufficient for the overwhelming majority of work. The right default for anything under three files or with a clear, low-risk goal. **Superpowers** solves the *discipline* problem: the agent that rushes to code without a spec, skips tests, or grades its own output. Enforces process gates via portable Markdown skills (brainstorm gate, TDD Iron Law, independent review) on any harness, at around 250K tokens. **GSD** solves the *context rot* problem and the *project ownership* problem: long sessions where architectural coherence erodes, and workflows where you want the framework — not you — to manage the engineering process. Fresh 200K-token subagent contexts per phase, canonical artifacts (`PLAN.md`, `VERIFICATION.md`, `STATE.md`) as handoff, verification gates, autonomous chaining. Expensive — around 1.2M tokens and one hundred minutes for the same small feature — but it pays off when the coordination overhead or context rot would cost more than the framework itself.
-
-The decision rule routes on three factors: **complexity** (how many files and subsystems), **risk** (cost of a wrong answer), **context depth** (how much project history the agent needs). When both discipline and context rot are risks, stack Superpowers inside GSD — the tools compose.
-
-| If... | Use |
-|---|---|
-| ≤3 files, clear goal, low risk | **Native** — plan + execute |
-| Multi-file, discipline is the risk (agent rushes past tests or spec) | **Superpowers** — enforce gates, spend 250K |
-| Ambiguous scope, multi-subsystem, context rot is the risk (sessions degrade) | **GSD** — phase isolation, spend 1.2M |
-| Both discipline AND context rot are risks | **Superpowers inside GSD** — stacking is valid |
-| You want to own the roadmap and stay in fast loops | **Lighter SDD** (OpenSpec-class) — propose→apply→archive per change |
-| You want the framework to own the project and run autonomous chunks | **GSD** — set it running, come back to review the result |
-
-The practical heuristic: reach for a heavier framework only when context rot or coordination overhead would cost more than the framework's token overhead. A bug fix in one service never reaches that threshold. A greenfield feature touching auth, billing, and a new data model probably does.
-
-The gap in *visible* output quality between frameworks is consistently smaller than the gap in time and cost — both a light and a heavy framework can produce apps that look and feel similar through a manual browser pass. The real difference shows in the repo baseline: tests, typecheck scripts, configuration hygiene, proper helper separation. GSD-class frameworks reliably produce these; lighter tools rarely do. The LLM carries most of the weight regardless of scaffolding; what heavier frameworks add is engineering discipline and reduced coordination overhead — not raw capability. In real-world runs, GSD costs roughly 3–4× the total tokens of lighter SDD alternatives for similar visible output. Reach for it only when that premium is worth paying.
-
-For the full head-to-head — same app, five different runs, what each framework actually changes — see [the framework comparison](/writing/same-app-very-different-run).
-
-## Appendix: the cost of going heavier
-
-The visible output gap between frameworks is often smaller than the cost gap. The heavier frameworks pay off less in surface polish and more in repo hygiene: tests, type safety, separation of concerns, configuration, and reviewability.
-
-| | Native | Superpowers | OpenSpec | Spec Kit | GSD |
-|---|---|---|---|---|---|
-| **Time ¹** | 20 min | ~60 min | ~35 min ᵉ | ~100 min ᵉ | ~105 min |
-| **Tokens ¹** | 200K | 250K | ~350K ᵉ | ~600K ᵉ | 1.2M |
-| **Time ratio ²** | ~0.5× ᵉ | ~1.7× ᵉ | 1× | ~2.7× | ~2.9× |
-| **Token ratio ²** | ~0.6× ᵉ | ~0.7× ᵉ | 1× | ~1.7× | ~3.6× |
-
-¹ Chase AI blog (chaseai.io), April 2026 — simple projects, same model, per-session context tokens.
-² The Gray Cat YouTube channel, May–June 2026 — full PRD builds, total API tokens across threads. Headline numbers: GSD 126M tokens vs OpenSpec 35.3M tokens (3.57× ratio); OpenSpec 35.4M tokens / 2.5h vs Spec Kit 59.8M tokens / 5h (1.69× tokens, 2× wall-clock).
-ᵉ Bridging two datasets; treat as directional.
-
-For the full methodology, dataset caveats, and the second-source comparison: [Same app, very different run](/writing/same-app-very-different-run).
-
-## The bottleneck moves
-
-The first bottleneck was the code. When the agent could write it, planning became the bottleneck. When the plan was testable, verification became the bottleneck. When verification was adversarial, taste became the bottleneck. For Lexomat, the next one was domain correctness — whether the AI was right about Slovak law — and that one only a human can close.
-
-The whole point of the loop is to make the next bottleneck visible. If everything is going smoothly, you are not looking carefully enough. Identify the current one. Work on it. Ignore everything else until it moves. Then find the next one.
-
-Stop prompting. Start engineering loops.
+Loops ship work.
