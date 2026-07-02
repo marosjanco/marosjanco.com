@@ -1,0 +1,292 @@
+---
+title: "Agents 101: What They Are and Why They Matter Now"
+date: "2025-07-02"
+summary: "The difference between a chatbot and an agent. Why function calling changed everything. How to understand the agent landscape in 2025."
+tags: ["agents", "llm", "ai", "frameworks", "agentic-ai"]
+draft: false
+---
+
+# Agents 101: What They Are and Why They Matter Now
+
+Last year, the conversation around AI was all about chatbots. ChatGPT, Claude, Gemini—powerful language models that could answer questions, write code, explain concepts. They were impressive. But they had a fundamental limitation: they were reactive.
+
+You ask a question. The model generates an answer. Done. One pass.
+
+An agent works differently. An agent is purposeful. An agent *acts*.
+
+## The Agent Loop: Observe → Reason → Act
+
+Let me define what we mean by an "agent" precisely, because the term is overloaded in AI circles.
+
+**An agent is an autonomous system that repeatedly:
+1. Observes the current state of the world
+2. Reasons about what action to take next
+3. Takes that action
+4. Loops back to observation**
+
+This is the fundamental pattern. And it's a departure from how we think about LLMs.
+
+Consider a lawyer with a complex case. She needs to:
+- Read a customer's complaint email
+- Search case law for precedents
+- Look up statutory requirements
+- Cross-reference with prior verdicts
+- Synthesize all that into a legal opinion
+
+A chatbot could generate an opinion if you fed it all that context at once. But it wouldn't go *find* the context. An agent would. An agent would:
+
+1. **Observe:** "The user is asking about contract liability. I need case law and statute text."
+2. **Reason:** "I should search the legal database for precedents, then look up the statute."
+3. **Act:** Call the database search tool. Get results. Search the statute API. Get results.
+4. **Observe:** "Now I have precedents and statute text. Do I have enough information to answer?"
+5. **Reason:** "Yes, I can synthesize an answer now."
+6. **Act:** Generate the opinion.
+
+This loop is the difference between *reactive* systems (chatbots) and *agentic* systems (agents).
+
+## Why Agents Are Only Possible Now
+
+Agents have been theoretically possible for decades. The idea dates back to the 1950s. But they weren't *practical* until 2023-2024. Here's why the timing matters.
+
+### Three Things Changed
+
+**1. Function Calling Became Reliable**
+
+Five years ago, if you wanted an LLM to call a function, you'd write a prompt like:
+
+> "To search for something, write `<search>query</search>` in your response."
+
+The model would output text. You'd parse it with regex. And most of the time, it would hallucinate:
+
+- It would invent function names that don't exist
+- It would forget to close XML tags
+- It would make up parameters
+- It would call the wrong function
+
+This wasn't the model's fault. It was being asked to generate free-form text that you'd then parse. That's fragile.
+
+In 2023, OpenAI introduced **function calling as a native LLM capability**. Instead of generating text, the model outputs structured JSON. Instead of generating:
+
+```
+Let me search for the answer: <search>quantum computing</search>
+```
+
+It outputs:
+
+```json
+{
+  "function_name": "search",
+  "arguments": {
+    "query": "quantum computing"
+  }
+}
+```
+
+This is radically more reliable because the output space is constrained. The model isn't generating arbitrary text; it's choosing from your predefined function schema.
+
+All the major LLM providers now support this. Claude, GPT-4, Gemini. It's table stakes.
+
+**2. Context Windows Exploded**
+
+A few years ago, an LLM could only process about 4,000 tokens—roughly 2,500 words. Today's models can handle 100,000+ tokens. That's 65,000 words.
+
+Why does this matter for agents?
+
+Because every step in an agent's reasoning consumes context. If an agent takes 10 actions:
+- Each action generates a function call (tokens)
+- Each function call has a result (tokens)
+- The agent reasons over all of this (tokens)
+- Total: easily 20,000-50,000 tokens for a complex run
+
+With a 4K context window, you hit the limit after 2-3 actions. With a 100K window, you can sustain complex multi-step reasoning.
+
+**3. Costs Dropped**
+
+Inference used to be expensive. Running 10,000 tokens through a model might cost $1. Now it's often $0.01-0.05 depending on the model.
+
+This matters for agents because you need to be able to loop. If every loop costs real money, you can't afford to explore. Now you can.
+
+## The Agent Spectrum
+
+Not all agents are the same. They exist on a spectrum from simple to complex.
+
+### Simple Tool-Calling Agents
+
+These are lightweight. One or two tools. Fast. Deterministic. Example:
+
+- **Web search agent:** User asks a question → Agent searches the web → Agent synthesizes an answer.
+- **Calculator agent:** User gives a math problem → Agent calls the calculator → Agent returns the result.
+
+These agents might only loop once or twice. They're cheap to run. Great for customer support, Q&A systems, information retrieval.
+
+### Long-Horizon Reasoning Agents
+
+These solve multi-step problems that require planning, exploration, backtracking, and persistence. Examples:
+
+- **AI researcher solving a research question:** The agent might spend an hour exploring different approaches, hitting dead ends, pivoting, and eventually finding a solution.
+- **Business analyst running a market analysis:** The agent might fetch data from multiple sources, reconcile contradictions, and generate a comprehensive report.
+
+These agents are computationally expensive. Not for real-time chat. Designed for batch jobs.
+
+### Everything In Between
+
+Most practical applications live in the middle. Moderate complexity. A handful of tools. A few reasoning steps. Fast enough for customer-facing applications, but sophisticated enough to handle real problems.
+
+## Three Frameworks, Three Philosophies
+
+In the HuggingFace ecosystem, three major agent frameworks have emerged. They're not competing—they're solving different problems.
+
+### Smolagents: Code-First
+
+Philosophy: **Agents should be simple. Code is the common language.**
+
+In Smolagents, when an agent needs to solve a problem, it *writes Python code*. Not just function calls, but actual executable code. It can write loops, conditionals, variable assignments—all the power of a programming language.
+
+This is elegant because:
+- Code is precise and unambiguous
+- Code naturally composes (functions calling functions)
+- Code is token-efficient (compressed reasoning)
+- Developers think in code anyway
+
+Trade-off: Slightly higher latency (the agent needs to reason through code generation), but often superior results for complex tasks.
+
+Best for: Internal tools, prototypes, teams comfortable with Python.
+
+### LangGraph: Explicit Control
+
+Philosophy: **Agents should be observable and controllable. Build them as graphs.**
+
+In LangGraph (from LangChain), you define an agent as a graph. Nodes represent steps. Edges represent transitions. You see exactly what the agent is doing.
+
+This is powerful for production because:
+- Total visibility into the reasoning process
+- You can debug step by step
+- You can add human-in-the-loop decision points
+- You can track state explicitly
+
+Trade-off: More boilerplate. You define the graph explicitly; the framework doesn't infer it.
+
+Best for: Production systems where reliability and debuggability matter. Customer-facing applications.
+
+### LlamaIndex: Data-Aware
+
+Philosophy: **Agents should reason over documents and knowledge. Make retrieval first-class.**
+
+LlamaIndex is built for unstructured data. You point it at documents. It chunks them. Embeds them. Indexes them. The agent can then query that index intelligently.
+
+This is essential for:
+- Knowledge workers (lawyers, analysts, researchers)
+- Document-heavy workflows
+- Domain-specific knowledge bases
+
+Trade-off: Less flexible for non-document tasks. Not your tool if you're building a calculator agent.
+
+Best for: Professionals working with documents and knowledge bases.
+
+## Why Agents Matter (Beyond the Hype)
+
+There are three reasons agents are transformative, and they're not about the technology.
+
+### 1. They Scale Human Judgment
+
+A chatbot is a one-shot generator. You ask it something; it answers. If the answer is wrong, you ask again. You're in the loop for every decision.
+
+An agent works for you. You set a goal. It pursues it. It learns from failures mid-execution. It adapts. You set it and walk away.
+
+Example: A customer support agent handling a complex issue.
+
+**With a chatbot:**
+- System generates a canned response
+- Customer replies with more details
+- You manually escalate
+- You keep looping
+
+**With an agent:**
+- User describes the problem
+- Agent reads customer history
+- Agent checks account status
+- Agent runs diagnostics
+- Agent looks up known fixes
+- Agent either resolves it or files a ticket
+- Agent follows up
+- Agent sends the solution to the customer
+
+All of this happens without human intervention. The agent scaled the human's judgment across a workflow.
+
+### 2. They Force Good Architecture
+
+Right now, organizational knowledge is locked in applications. You want an agent to query your customer database? You need an API. You want an agent to check a service status? You need an endpoint. You want an agent to fetch a document? You need a document store.
+
+Building agents forces you to expose these systems as APIs. It forces you to think about composability. It forces you to modernize.
+
+This is actually a feature, not a bug. The companies that build agents will end up with better infrastructure.
+
+### 3. They're Learnable
+
+If you understand how to build one simple agent, you can build complex ones. The principles scale. You're not learning a tool; you're learning a mental model.
+
+This mental model—observe, reason, act, loop—applies to every agent problem you'll encounter. It's learnable. It's teachable. It's generalizable.
+
+## The Immediate Opportunities
+
+Agents are creating immediate opportunities for AI practitioners:
+
+1. **Replace repetitive workflows** – Any multi-step process that a human does manually is a candidate for agentic automation.
+
+2. **Augment domain experts** – Lawyers, analysts, consultants can delegate research and analysis to agents. They focus on judgment.
+
+3. **Build new interfaces** – Instead of asking users to fill out forms, agents can conduct conversations and extract structured data.
+
+4. **Improve customer support** – Agents can handle Tier-1 support (retrieval, account lookup, basic troubleshooting) while humans handle escalations.
+
+The bar for "good enough" is low. You don't need a perfect system. You need a system that's better than doing it manually.
+
+## What's Coming Next
+
+This is just the beginning. The next wave will likely include:
+
+- **Better reasoning models** – Models trained specifically for multi-step reasoning (see OpenAI o1, reasoning-focused architectures)
+- **Improved memory management** – Better ways to handle long-term context without blowing up token count
+- **Standardized tool definitions** – Moving toward Model Context Protocol (MCP) as the standard
+- **Better evaluation** – Clearer ways to measure agent performance
+- **Safer sandboxing** – Running untrusted agent code without risk
+
+## How to Get Started
+
+If you want to build your first agent, the path is clear:
+
+1. **Learn the fundamentals** – Understand how function calling works, what context windows are, how tokens affect cost
+2. **Build a simple agent** – Use Smolagents or LangGraph to build a weather agent or web search agent
+3. **Add tools** – Integrate an API, a database, a knowledge base
+4. **Deploy** – Wrap it in a REST API or scheduled job
+5. **Iterate** – Measure performance. Improve the prompt. Refine the tools.
+
+You don't need to understand the theory perfectly. You learn by building.
+
+## Conclusion
+
+The agent revolution isn't a future event. It's happening now. The tools are mature. The capabilities are proven. The economics work.
+
+The question isn't "Will agents be important?" It's "Will you be the one building them?"
+
+The people who understand agents first will ship the most interesting products. They'll build better tools. They'll solve harder problems. And they'll do it faster than teams still stuck in the chatbot era.
+
+If you're serious about AI, you need to understand agents. Not five years from now. Now.
+
+---
+
+## Resources
+
+- **Smolagents:** [HuggingFace Docs](https://huggingface.co/docs/smolagents/)
+- **LangGraph:** [LangChain Docs](https://langchain-ai.github.io/langgraph/)
+- **LlamaIndex:** [Official Docs](https://docs.llamaindex.ai/)
+- **Function Calling:** [OpenAI Guide](https://platform.openai.com/docs/guides/function-calling)
+- **Model Context Protocol:** [MCP Specification](https://modelcontextprotocol.io/)
+
+## Listen to the Episode
+
+This essay is based on Episode 1 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/PLACEHOLDER)**
+
+---
+
+**What agent would you build first?** Drop a comment or reach out on Twitter [@maros_janco](https://twitter.com/maros_janco). I'm reading every response.
