@@ -1,0 +1,346 @@
+---
+title: "How LLMs Actually Work: Tokenization, Context, and Function Calling"
+date: "2025-07-02"
+summary: "What language models are really doing under the hood. Why tokens matter. How function calling solved the hallucination problem. The fundamentals that make agents possible."
+tags: ["llm", "tokenization", "function-calling", "architecture", "ai"]
+draft: false
+---
+
+# How LLMs Actually Work: Tokenization, Context, and Function Calling
+
+Here's a hard truth: most people who use language models don't understand how they work. They use them. They get results. But the mechanics are opaque.
+
+This matters for agent builders because agents are built on LLMs. If you don't understand what's happening under the hood, you'll make rookie mistakes. You'll build agents that fail in predictable ways. You'll optimize the wrong things.
+
+So let's look inside.
+
+## Language Models Are Probability Engines, Not Knowledge Bases
+
+Start here: **A language model is not a database of knowledge. It's a statistical predictor.**
+
+When you give an LLM a prompt, here's what actually happens:
+
+1. The text gets converted to numbers (tokens)
+2. The model does matrix math on those numbers
+3. The math outputs a probability distribution over the vocabulary
+4. The model samples from that distribution to produce the next token
+5. The model loops
+
+That's it. No knowledge retrieval. No reasoning. No thinking. Prediction.
+
+Let me be concrete. When you ask ChatGPT, "What is the capital of France?", the model doesn't look up France in a database. It's learned patterns from its training data that correlate the input "capital of France" with the output "Paris." So when it predicts the next token after "capital of France," the token "Paris" has high probability.
+
+But here's the key insight: **This works when information is common in the training data. It breaks when information is rare or novel.**
+
+Ask an LLM about a company founded last week? It'll make something up. Ask it to do a calculation it hasn't seen before? It'll hallucinate. Ask it to call a function with specific parameters? It used to fail constantly.
+
+This is the fundamental limitation of LLMs. And it's why agents matter.
+
+## Tokens: The Currency of LLMs
+
+Before a language model can process text, the text must be converted to tokens. A token is roughly a word, or a chunk of a word.
+
+### How Tokenization Works
+
+The text "Hello, world!" becomes:
+
+```
+"Hello"     → token 1
+","         → token 2 (sometimes merged: "Hello," → token 1)
+"world"     → token 3
+"!"         → token 4
+```
+
+Total: 3-4 tokens depending on the tokenizer.
+
+Why this matters: **Tokens are the unit of cost.** When you pay $0.001 per 100,000 tokens, you're paying for tokens, not characters or words.
+
+### Token Efficiency Varies
+
+English is relatively token-efficient. The sentence "The quick brown fox" is ~4 tokens.
+
+But other languages are less efficient:
+- **Chinese:** More tokens per character (character-level writing)
+- **Arabic:** More tokens per word (diacritics, ligatures)
+- **Code:** More tokens per line (special characters, indentation)
+
+This is important for agent design. If you're building an agent that processes code or other languages, your token budget shrinks faster.
+
+### The Hidden Cost
+
+Here's where agents get expensive: every step in the agent's loop consumes tokens.
+
+Say you build an agent with 5 tools. The agent reasons once, calls a tool, gets a result, reasons again, calls another tool, gets a result...
+
+Each loop looks like:
+- **Input:** The full conversation history so far (500-2000 tokens)
+- **Reasoning:** The model thinks (generates reasoning tokens)
+- **Output:** Function call (50-200 tokens)
+- **Observation:** The function result (100-1000 tokens)
+
+Five loops × 1500 tokens average = 7,500 tokens. At $0.001 per 1000 tokens, that's $0.0075 per agent run.
+
+Scale to 1000 users running agents daily: 7,500 users-runs = $56 per day. Not huge. But it adds up.
+
+This is why **token efficiency is baked into good agent design**. You want to minimize what the agent *writes* (reasoning in natural language takes tokens) and maximize what it *executes* (code execution doesn't consume LLM tokens).
+
+## Context Windows: The Finite Resource
+
+A language model has a fixed amount of space it can "see" at once. This is the **context window**.
+
+Old models: 4,000 tokens
+Modern models: 100,000+ tokens
+Frontier models: 200,000+ tokens
+
+What counts against the context window?
+
+- Everything you've written (system prompt, initial instructions, current question)
+- Everything the model has written so far (reasoning, past outputs)
+- All the function results the agent has received
+- The full conversation history
+
+In a 10-step agent run, if each step adds 1,000 tokens, you've consumed 10,000 tokens. In a 100-step run, you're at 100,000 tokens. Hit the context limit, and the model stops. Your agent halts.
+
+This is why long-horizon reasoning agents need huge context windows.
+
+### Context Optimization Strategies
+
+As you build agents, you'll need strategies to stay within context:
+
+1. **Pruning:** Delete old messages after summarizing them
+2. **Summarization:** Compress old messages into summaries
+3. **Selective retrieval:** Only include relevant past messages
+4. **Shallow memory:** Only keep the last N messages
+
+These are real techniques used in production systems. You need to think about them from day one.
+
+## The Function Calling Revolution
+
+Here's the pivot point that made modern agents possible.
+
+### The Old Way (Pre-2023)
+
+To get an LLM to call a function, you'd write something like:
+
+```
+You have access to the following tools:
+- search(query): Search the web
+- calculate(expression): Do math
+
+To use a tool, write it in your response like:
+<search>quantum computing</search>
+
+Now, answer this: What is quantum computing?
+```
+
+The model would output:
+
+```
+Quantum computing is... let me search for more details.
+
+<search>quantum computing principles</search>
+
+Based on my search, quantum computing uses... [answer]
+```
+
+Then you'd extract the XML with regex and execute it.
+
+**The problem:** This was fragile. Models would:
+- Hallucinate function names (`<seach>` instead of `<search>`)
+- Forget closing tags (`<search>query`)
+- Invent parameters that don't exist
+- Call the wrong function
+
+You were asking the model to generate free-form text that you'd parse. Parsing free-form text is always brittle.
+
+### The New Way (2023+)
+
+All major LLM providers now support **function calling as a native capability**.
+
+Instead of generating text, the model outputs structured JSON.
+
+You define your functions as JSON schemas:
+
+```json
+{
+  "name": "search",
+  "description": "Search the web for information",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "The search query"
+      }
+    },
+    "required": ["query"]
+  }
+}
+```
+
+When you ask the model to search for something, it outputs:
+
+```json
+{
+  "name": "search",
+  "arguments": {
+    "query": "quantum computing principles"
+  }
+}
+```
+
+**Why this works:**
+
+The model isn't generating arbitrary text. It's constrained to output valid JSON that matches your schema. The output space is bounded. The model can't hallucinate a function name because you've told it: "Pick from these specific options."
+
+This is the insight that changed everything. **Structure constrains the model's output space, making it reliable.**
+
+### Function Calling Under the Hood
+
+The mechanics are interesting. The model doesn't magically understand "JSON schema." What's happening:
+
+1. You provide the schema as text in the prompt
+2. The model has learned from training data what valid JSON looks like
+3. You tell the model "output a function call matching this schema"
+4. The model's training has examples of this pattern
+5. It generates the most likely valid JSON that matches your schema
+
+It's still prediction. But prediction in a constrained space is much more reliable.
+
+### Structured Outputs: The Next Step
+
+Even newer: **structured output mode** in Claude and GPT-4. You pass a Pydantic model:
+
+```python
+from pydantic import BaseModel
+
+class SearchCall(BaseModel):
+    query: str
+```
+
+The model is told: "Output a JSON object matching this schema." The model enforces this at generation time. Zero hallucinations.
+
+This is the frontier. If you're building agents in 2025, use structured outputs.
+
+## Prompt Engineering for Agents
+
+How you phrase the prompt shapes the agent's behavior dramatically.
+
+### Bad Agent Prompt
+
+```
+You are a helpful AI assistant. Answer user questions.
+```
+
+This is for chatbots. For agents, it's too vague.
+
+### Good Agent Prompt
+
+```
+You are a task-solving agent. The user will give you a goal. 
+
+You have access to the following tools: [TOOLS]
+
+Your job is to:
+1. Understand the goal
+2. Decide which tool(s) to use
+3. Call the tools in the right order
+4. Analyze the results
+5. If you don't have enough information, call more tools
+6. When you have enough information, generate a final answer
+
+Important:
+- If a tool call fails, analyze why and try a different approach
+- Keep trying until the goal is achieved or you've exhausted reasonable options
+- Be concise in your reasoning
+- Focus on solving the problem, not explaining your process
+```
+
+The differences:
+
+- **Goal-oriented:** "to achieve the goal"
+- **Tool-aware:** Lists tools explicitly
+- **Failure-handling:** "If a tool call fails, try a different approach"
+- **Termination:** "until the goal is achieved"
+- **Focus:** "solving the problem, not explaining"
+
+The prompt shapes behavior. A vague prompt → confused agent. A precise prompt → focused agent.
+
+## Cost Optimization
+
+Understanding tokens and context is essential for cost management.
+
+### The Math
+
+- Model: Claude 3.5 Sonnet
+- Input cost: $0.003 per 1000 tokens
+- Output cost: $0.015 per 1000 tokens
+- Typical agent loop: 1000 input tokens + 200 output tokens = 1200 tokens
+- Cost per loop: (1000 × $0.000003) + (200 × $0.000015) = $0.003 + $0.003 = **$0.006 per loop**
+
+For a 5-loop agent run: $0.03. Scale to 10,000 agent runs/day: $300/day.
+
+For GPT-4o (more expensive): roughly 3-5× that cost.
+
+This is why **token efficiency matters at scale**. Optimize your prompts. Prune context. Use cheaper models for simple tasks.
+
+### Token Budgeting for Agents
+
+Before deploying an agent, estimate token usage:
+
+```python
+# Estimate max tokens for N-step agent
+max_steps = 5
+avg_tokens_per_step = 1500
+
+total_estimated_tokens = max_steps * avg_tokens_per_step
+# 5 × 1500 = 7500 tokens
+
+# Cost estimation
+cost_per_1k_tokens = 0.003  # Claude input
+total_cost = (total_estimated_tokens / 1000) * cost_per_1k_tokens
+# 7.5 × 0.003 = $0.0225 per run
+```
+
+For production systems, you need these estimates. They inform pricing. They inform whether the business model works.
+
+## Putting It Together: Why Function Calling Enables Agents
+
+Now you can see the full picture:
+
+1. **Agents need to call tools reliably.** (Function calling solves this.)
+2. **Agents loop, consuming tokens.** (Understanding tokens helps you optimize.)
+3. **Agents need context.** (Context windows limit loop depth.)
+4. **Agents need clear goals.** (Good prompts guide behavior.)
+
+Function calling isn't just a feature. It's the foundation. It's what makes agents *practical* instead of *theoretical*.
+
+Without function calling, you're trying to parse fragile text patterns. With function calling, the output is structured and reliable. That's the difference between a proof-of-concept and production.
+
+## What Gets Built on This Foundation?
+
+Understanding these fundamentals sets you up for:
+
+- **Better prompt engineering:** You know what the model can and can't do
+- **Smarter tool design:** You design tools that minimize tokens
+- **Cost prediction:** You can estimate agent costs before deploying
+- **Failure handling:** You understand why agents fail and how to fix them
+- **Model selection:** You pick the right model for the task
+
+## Recommended Further Reading
+
+- **Tokenization deep dive:** [HuggingFace Course - Chapter 2.4](https://huggingface.co/course/chapter2/4)
+- **LLM fundamentals:** [What is a Language Model?](https://huggingface.co/docs/transformers/en/model_doc/auto)
+- **Function calling (OpenAI):** [API Reference](https://platform.openai.com/docs/guides/function-calling)
+- **Tool use (Anthropic):** [Prompt Engineering Guide](https://docs.anthropic.com/en/docs/build-a-system-prompt-for-claude#tool-use)
+- **Structured outputs:** [Claude Docs](https://docs.anthropic.com/en/docs/guides/structured-outputs)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 2 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/PLACEHOLDER)**
+
+---
+
+**Still confused about context windows? Tokens? Function calling?** Tweet your questions at [@maros_janco](https://twitter.com/maros_janco). I'll answer them directly.

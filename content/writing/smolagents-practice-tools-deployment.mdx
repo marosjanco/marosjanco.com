@@ -1,0 +1,676 @@
+---
+title: "Smolagents in Production: Tools, Models, and Deployment Patterns"
+date: "2025-07-03"
+summary: "Model selection trade-offs (local vs API vs premium). Building multi-tool agents. FastAPI async patterns. Deploying Smolagents to production. Real-world considerations."
+tags: ["smolagents", "deployment", "production", "fastapi", "agents"]
+draft: false
+---
+
+# Smolagents in Production: Tools, Models, and Deployment Patterns
+
+You've built an agent locally. It works. Now you need to ship it.
+
+Production is where theory meets reality. You'll face questions that the tutorial doesn't cover:
+
+- Which model should I use? Local? API? Premium?
+- How do I combine multiple tools effectively?
+- What deployment pattern scales?
+- How do I handle errors?
+- What about cost at scale?
+
+Let's work through each.
+
+## Model Selection: The Trade-off Matrix
+
+This is the first decision you'll make in production. And it's crucial.
+
+There are three patterns, each with different economics and trade-offs.
+
+### Pattern 1: Local Models
+
+Download a quantized open-source model. Run it locally on your hardware. Use Ollama or LM Studio.
+
+Examples: Mistral 7B, Llama 2 13B, Phi-3
+
+```python
+from smolagents import CodeAgent
+from ollama import Ollama
+
+# Local model via Ollama
+model = Ollama(model_id="mistral:latest")
+
+agent = CodeAgent(
+    model=model,
+    tools=[get_weather, search_wikipedia]
+)
+
+result = agent.run("What's the weather in Paris?")
+```
+
+**Pros:**
+- Complete privacy (data never leaves your machine)
+- Zero network latency
+- Low long-term cost (amortize GPU over many runs)
+- No vendor lock-in
+
+**Cons:**
+- High latency for inference (2-3 seconds per token on consumer GPU)
+- For an agent that reasons 3-4 times: 30-40 seconds per run
+- Quality is lower (smaller models hallucinate more)
+- You own the infrastructure (GPU, cooling, updates)
+- Limited reasoning capability
+
+**Cost:**
+- Nvidia RTX 4080: ~$1200 hardware
+- Electricity: ~$20/month
+- Amortize over 10,000 agent runs: ~$0.12/run (excluding ops)
+
+**When to use:** Internal tools, privacy-critical applications, low-volume use cases.
+
+### Pattern 2: Inference API
+
+Services like HuggingFace Inference API, Together AI, Replicate. You pay per token. They handle scaling.
+
+```python
+from smolagents import CodeAgent, HfApiModel
+
+model = HfApiModel(
+    model_id="meta-llama/Llama-3.1-70b-Instruct",
+    api_token="hf_..."
+)
+
+agent = CodeAgent(
+    model=model,
+    tools=[get_weather, search_wikipedia],
+    max_iterations=5
+)
+
+result = agent.run("What's the weather in Paris?")
+```
+
+**Pros:**
+- Lower latency than local (optimized servers)
+- Transparent pricing (pay for what you use)
+- No infrastructure management
+- Easy to scale
+
+**Cons:**
+- Network latency (request/response over the internet)
+- Token-based pricing adds up quickly
+- 5-loop agent × 1000 tokens/loop = 5000 tokens per run
+- At $0.00001/token: $0.05 per run
+- 10,000 runs/day = $500/day
+
+**Cost:**
+- HuggingFace Inference API: ~$0.0001-0.0002 per 1000 tokens (varies by model)
+- Typical agent run (5000 tokens): $0.0005-0.001
+- 10,000 runs/day: $5-10/day
+
+**When to use:** Prototyping, medium-scale applications, cost-conscious projects with lower complexity.
+
+### Pattern 3: Premium LLM Providers
+
+OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), Google (Gemini 2.0). Best-in-class reasoning.
+
+```python
+from smolagents import CodeAgent
+from anthropic import Anthropic
+
+# Using Anthropic's Claude
+client = Anthropic(api_key="sk-...")
+
+# Wrap it for Smolagents
+class ClaudeModel:
+    def __init__(self, client):
+        self.client = client
+    
+    def __call__(self, prompt):
+        response = self.client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+
+model = ClaudeModel(client)
+
+agent = CodeAgent(
+    model=model,
+    tools=[get_weather, search_wikipedia]
+)
+
+result = agent.run("What's the weather in Paris?")
+```
+
+**Pros:**
+- Best reasoning (Claude and GPT-4o are the smartest)
+- Fastest latency
+- Most reliable tool use
+- Enterprise-grade safety and moderation
+
+**Cons:**
+- Highest cost ($0.003-0.015 per 1000 tokens)
+- Typical agent run (5000 tokens): $0.015-0.075
+- 10,000 runs/day: $150-750/day
+- Vendor lock-in
+
+**Cost:**
+- Claude 3.5 Sonnet: $0.003 input / $0.015 output per 1000 tokens
+- GPT-4o: $0.005 input / $0.015 output per 1000 tokens
+- Typical agent run (4000 input + 1000 output): $0.03-0.04
+
+**When to use:** Production systems where reasoning quality matters. Customer-facing applications. Complex reasoning.
+
+## The Honest Take
+
+For production agents doing complex reasoning, you're usually picking OpenAI or Anthropic.
+
+The reasoning gap between GPT-4o and a 7B model is *not small*. A 7B model will:
+- Miss context clues
+- Make logical errors
+- Hallucinate less reliably
+- Struggle with edge cases
+
+But if you're building internal tools, prototyping, or have strict privacy requirements, local or inference API wins.
+
+**And Smolagents makes switching cheap.** You change one line and swap the model. That's the point.
+
+## One More Consideration: Tool-Use Capability
+
+Not all models are equal at calling tools reliably.
+
+Claude and GPT-4o have rock-solid tool use. They follow tool schemas precisely. They don't hallucinate tool calls.
+
+Mistral is good. Phi-3 is decent. Smaller open models struggle. They:
+- Invent tool names that don't exist
+- Forget required parameters
+- Call tools multiple times unnecessarily
+
+For agents, **a model that hallucinates tool calls is a liability**.
+
+Test your model with your tools before production. Give it a query. See if it calls the right tools with the right parameters.
+
+## Building Multi-Tool Agents
+
+The real power of agents comes from combining tools intelligently.
+
+Let's build an agent with three tools:
+
+```python
+import requests
+from bs4 import BeautifulSoup
+
+def get_weather(location: str) -> dict:
+    """Get current weather for a location."""
+    # Same as before
+    ...
+
+def search_wikipedia(topic: str) -> str:
+    """
+    Search Wikipedia and return the first paragraph.
+    
+    Args:
+        topic: The topic to search for
+    
+    Returns:
+        str: First paragraph of Wikipedia article
+    """
+    url = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "titles": topic,
+        "prop": "extracts",
+        "explaintext": True,
+        "format": "json"
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        pages = response.json()["query"]["pages"]
+        
+        for page in pages.values():
+            if "extract" in page:
+                # Return first 500 characters
+                return page["extract"][:500]
+        
+        return "No Wikipedia information found."
+    except Exception as e:
+        return f"Error searching Wikipedia: {str(e)}"
+
+def suggest_activities(weather_condition: str, location: str) -> str:
+    """
+    Suggest activities based on weather.
+    
+    Args:
+        weather_condition: Weather type (e.g., 'Sunny', 'Rainy')
+        location: Location name
+    
+    Returns:
+        str: Activity suggestions
+    """
+    activities = {
+        "Sunny": "outdoor activities, sightseeing, beach",
+        "Rainy": "museums, indoor attractions, shopping malls",
+        "Cloudy": "hiking, nature walks, photography",
+        "Snowy": "skiing, ice skating, winter sports",
+        "Stormy": "indoor activities, movie theater, spa"
+    }
+    
+    suggestion = activities.get(weather_condition, "general activities")
+    return f"In {location} with {weather_condition} weather, try: {suggestion}"
+
+# Create agent
+from smolagents import CodeAgent, HfApiModel
+
+model = HfApiModel(
+    model_id="meta-llama/Llama-3.1-70b-Instruct",
+    api_token="your_token"
+)
+
+agent = CodeAgent(
+    model=model,
+    tools=[get_weather, search_wikipedia, suggest_activities],
+    max_iterations=8
+)
+
+# Run it
+result = agent.run(
+    "Plan my trip to Barcelona. "
+    "What's the weather like? "
+    "What is Barcelona famous for? "
+    "What should I do?"
+)
+
+print(result)
+```
+
+The agent will automatically:
+1. Fetch weather for Barcelona
+2. Search Wikipedia for Barcelona facts
+3. Get activity suggestions
+4. Synthesize everything into a coherent trip plan
+
+**You didn't specify the order. The agent figured it out.**
+
+This is the magic. The framework disappears. You write business logic. The agent orchestrates it.
+
+## FastAPI Deployment
+
+How do you expose your agent as an API?
+
+### Simple Sync Pattern (Don't Do This in Production)
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.post("/agent/ask")
+async def ask_agent(question: str):
+    """Synchronous agent endpoint."""
+    result = agent.run(question)
+    return {"answer": result}
+```
+
+**Problem:** If the agent takes 30 seconds, the request hangs. Clients timeout. Bad UX.
+
+### Production Pattern: Async + Polling
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import asyncio
+from uuid import uuid4
+import json
+from typing import Optional
+
+app = FastAPI()
+
+# In production, use Redis or a database
+job_store = {}
+
+class QueryRequest(BaseModel):
+    question: str
+
+class JobResponse(BaseModel):
+    job_id: str
+
+class JobStatus(BaseModel):
+    job_id: str
+    status: str  # "running", "completed", "failed"
+    result: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/agent/query", response_model=JobResponse)
+async def submit_query(request: QueryRequest):
+    """
+    Submit a query to the agent.
+    Returns immediately with a job ID.
+    """
+    job_id = str(uuid4())
+    
+    # Store job metadata
+    job_store[job_id] = {
+        "status": "running",
+        "question": request.question,
+        "result": None,
+        "error": None,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    # Run agent in background
+    asyncio.create_task(
+        run_agent_background(job_id, request.question)
+    )
+    
+    return JobResponse(job_id=job_id)
+
+async def run_agent_background(job_id: str, question: str):
+    """Run agent in background, store result."""
+    try:
+        # Run the agent
+        result = await asyncio.to_thread(agent.run, question)
+        
+        # Store result
+        job_store[job_id]["result"] = result
+        job_store[job_id]["status"] = "completed"
+    except Exception as e:
+        job_store[job_id]["error"] = str(e)
+        job_store[job_id]["status"] = "failed"
+
+@app.get("/agent/status/{job_id}", response_model=JobStatus)
+async def get_job_status(job_id: str):
+    """Check job status."""
+    if job_id not in job_store:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = job_store[job_id]
+    return JobStatus(
+        job_id=job_id,
+        status=job["status"],
+        result=job.get("result"),
+        error=job.get("error")
+    )
+
+# Optional: cleanup old jobs (every hour)
+import time
+from datetime import timedelta
+
+@app.on_event("startup")
+async def cleanup_old_jobs():
+    """Periodically clean up old completed jobs."""
+    while True:
+        await asyncio.sleep(3600)  # Every hour
+        now = datetime.now()
+        for job_id, job in list(job_store.items()):
+            created = datetime.fromisoformat(job["created_at"])
+            if now - created > timedelta(hours=24):
+                del job_store[job_id]
+```
+
+Client side:
+
+```python
+import requests
+import time
+
+def query_agent_async(question: str):
+    # Submit query
+    response = requests.post(
+        "http://localhost:8000/agent/query",
+        json={"question": question}
+    )
+    job_id = response.json()["job_id"]
+    print(f"Submitted: {job_id}")
+    
+    # Poll for result
+    while True:
+        status_response = requests.get(
+            f"http://localhost:8000/agent/status/{job_id}"
+        )
+        status = status_response.json()
+        
+        if status["status"] == "completed":
+            return status["result"]
+        elif status["status"] == "failed":
+            raise Exception(f"Agent failed: {status['error']}")
+        
+        print(f"Status: {status['status']}... waiting")
+        time.sleep(1)
+
+# Use it
+result = query_agent_async("What's the weather in Paris?")
+print(result)
+```
+
+**Benefits:**
+- Client gets immediate response (job ID)
+- No request timeout
+- Client can check back without blocking
+- Multiple concurrent queries don't interfere
+- Easy to scale (use a job queue like Redis/Celery)
+
+## Production Considerations
+
+### Error Handling
+
+Tools fail. Networks fail. Models timeout.
+
+```python
+async def run_agent_background(job_id: str, question: str):
+    """Run agent with error handling."""
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            result = await asyncio.to_thread(
+                agent.run,
+                question,
+                timeout=120  # 2 minute timeout
+            )
+            job_store[job_id]["result"] = result
+            job_store[job_id]["status"] = "completed"
+            return
+        except asyncio.TimeoutError:
+            retry_count += 1
+            if retry_count < max_retries:
+                print(f"Timeout, retry {retry_count}/{max_retries}")
+                await asyncio.sleep(2 ** retry_count)  # Exponential backoff
+            else:
+                job_store[job_id]["error"] = "Request timed out after retries"
+                job_store[job_id]["status"] = "failed"
+        except Exception as e:
+            job_store[job_id]["error"] = str(e)
+            job_store[job_id]["status"] = "failed"
+            return
+```
+
+### Monitoring and Logging
+
+```python
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+async def run_agent_background(job_id: str, question: str):
+    """Run agent with logging."""
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Starting job {job_id}: {question}")
+        
+        result = await asyncio.to_thread(agent.run, question)
+        
+        elapsed = time.time() - start_time
+        logger.info(
+            f"Completed job {job_id} in {elapsed:.2f}s",
+            extra={
+                "job_id": job_id,
+                "status": "completed",
+                "elapsed_seconds": elapsed
+            }
+        )
+        
+        job_store[job_id]["result"] = result
+        job_store[job_id]["status"] = "completed"
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(
+            f"Failed job {job_id}: {str(e)}",
+            extra={
+                "job_id": job_id,
+                "status": "failed",
+                "elapsed_seconds": elapsed,
+                "error": str(e)
+            }
+        )
+        job_store[job_id]["error"] = str(e)
+        job_store[job_id]["status"] = "failed"
+```
+
+### Token Budget
+
+Before deploying, estimate token usage:
+
+```python
+def estimate_token_usage(agent_loops: int, avg_tokens_per_loop: int):
+    """Estimate total tokens for an agent run."""
+    total_tokens = agent_loops * avg_tokens_per_loop
+    
+    # Estimate cost (Claude 3.5 Sonnet)
+    input_cost = (total_tokens * 0.8) * 0.000003  # 80% inputs
+    output_cost = (total_tokens * 0.2) * 0.000015  # 20% outputs
+    
+    return {
+        "total_tokens": total_tokens,
+        "estimated_cost": input_cost + output_cost,
+        "cost_per_1000_tokens": (input_cost + output_cost) / (total_tokens / 1000)
+    }
+
+# Example: 5 loops, 1000 tokens/loop
+estimate = estimate_token_usage(5, 1000)
+print(f"Estimated cost: ${estimate['estimated_cost']:.4f}")
+# Output: Estimated cost: $0.0195
+
+# Scale to 10k runs/day
+daily_cost = estimate['estimated_cost'] * 10000
+print(f"Daily cost at 10k runs: ${daily_cost:.2f}")
+# Output: Daily cost at 10k runs: $195.00
+```
+
+Know your costs before they surprise you.
+
+## Deployment Options
+
+### Option 1: Docker
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY agent.py .
+COPY api.py .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```bash
+# Build
+docker build -t my-agent .
+
+# Run locally
+docker run -p 8000:8000 my-agent
+
+# Push to registry
+docker tag my-agent gcr.io/my-project/my-agent:latest
+docker push gcr.io/my-project/my-agent:latest
+```
+
+### Option 2: Cloud Run (Google Cloud)
+
+```bash
+# Deploy directly
+gcloud run deploy my-agent \
+  --source . \
+  --platform managed \
+  --memory 1Gi \
+  --timeout 3600 \
+  --set-env-vars HUGGINGFACE_API_KEY=...
+```
+
+### Option 3: Kubernetes
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-agent
+  template:
+    metadata:
+      labels:
+        app: my-agent
+    spec:
+      containers:
+      - name: agent
+        image: gcr.io/my-project/my-agent:latest
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        env:
+        - name: HUGGINGFACE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-secrets
+              key: api-key
+```
+
+## Key Takeaways
+
+1. **Choose your model based on requirements, not hype.** Local for privacy. API for cost. Premium for quality.
+2. **Build multi-tool agents by letting the agent orchestrate.** You define tools, the agent decides what to call.
+3. **Deploy async in production.** No synchronous endpoints. Use job IDs and polling.
+4. **Monitor and log everything.** You need visibility into what your agent is doing.
+5. **Estimate token usage upfront.** Know your costs before they become a surprise.
+
+## What's Next?
+
+Smolagents is excellent for agents you control completely. For systems with complex state, human-in-the-loop workflows, or sophisticated routing, you'll eventually graduate to LangGraph.
+
+But start with Smolagents. Ship it. Learn from production. *Then* optimize.
+
+## Recommended Further Reading
+
+- **Smolagents docs:** [HuggingFace](https://huggingface.co/docs/smolagents/)
+- **FastAPI async:** [FastAPI Tutorial](https://fastapi.tiangolo.com/async-sql-databases/)
+- **Docker best practices:** [Docker Docs](https://docs.docker.com/develop/dev-best-practices/)
+- **Cloud Run:** [Google Cloud Docs](https://cloud.google.com/run/docs)
+- **Token counting:** [Tiktoken (OpenAI)](https://github.com/openai/tiktoken)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 4 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/PLACEHOLDER)**
+
+---
+
+**Deploying an agent?** What platform are you using? What model? Email maros@marosjanco.com or tweet [@maros_janco](https://twitter.com/maros_janco). I want to learn what works in the wild.

@@ -1,0 +1,517 @@
+---
+title: "Building Code-First Agents with Smolagents"
+date: "2025-07-03"
+summary: "Smolagents philosophy. ToolCallingAgent vs CodeAgent. Building your first weather agent in 50 lines of Python. Complete code walthrough."
+tags: ["smolagents", "agents", "python", "code-first", "tutorial"]
+draft: false
+---
+
+# Building Code-First Agents with Smolagents
+
+Smolagents is the simplest way to build agents. It's from HuggingFace, and it's intentionally minimal.
+
+Most agent frameworks add complexity. They give you configuration options, plugin systems, state machines. You spend hours in the docs.
+
+Smolagents doesn't do that. When you read a Smolagents agent, you understand what's happening. No magic. No hidden state.
+
+The core philosophy is radical: **Agents should be transparent. Code is the medium of thinking.**
+
+## The Smolagents Philosophy
+
+Smolagents makes one crucial choice: **When an agent needs to think, it writes code.**
+
+Not text. Not pseudocode. Real Python. Executable.
+
+This is elegant because:
+
+- **Code is precise.** "Call function X with parameter Y=Z" is unambiguous.
+- **Code is verifiable.** You can see exactly what's happening.
+- **Code is efficient.** A line of Python says more than a paragraph of natural language.
+- **Code is composable.** Python functions combine naturally.
+- **Developers think in code.** It's the natural language for programmers.
+
+This design choice ripples through the whole framework.
+
+## ToolCallingAgent vs CodeAgent
+
+Smolagents gives you two agent types. Understanding when to use each is crucial.
+
+### ToolCallingAgent: Direct Function Calls
+
+A `ToolCallingAgent` uses function calling (like we discussed in the previous post). You give it a list of tools. It decides which tool to call. It calls them sequentially.
+
+```python
+from smolagents import ToolCallingAgent, HfApiModel
+
+# Define tools
+def get_weather(location: str) -> str:
+    """Get current weather for a location."""
+    # ... implementation ...
+    return weather_data
+
+def search_web(query: str) -> str:
+    """Search the web."""
+    # ... implementation ...
+    return results
+
+# Create agent
+model = HfApiModel(model_id="meta-llama/Llama-3.1-70b-Instruct")
+agent = ToolCallingAgent(
+    model=model,
+    tools=[get_weather, search_web],
+    max_iterations=5
+)
+
+# Run
+result = agent.run("What's the weather in Paris?")
+```
+
+**Use ToolCallingAgent for:**
+- Simple tasks (1-3 tool calls)
+- Fast responses (minimal latency)
+- Cost-sensitive applications
+
+**Trade-offs:**
+- Less flexible (can't combine tools creatively)
+- Can't do loops or conditionals
+- If a tool fails, it can't recover gracefully
+
+### CodeAgent: Python Code Execution
+
+A `CodeAgent` is wilder. Instead of calling tools directly, the agent *writes Python code*.
+
+```python
+from smolagents import CodeAgent, HfApiModel
+
+agent = CodeAgent(
+    model=HfApiModel(model_id="gpt-4o"),
+    tools=[get_weather, search_web],
+    max_iterations=10
+)
+
+result = agent.run("Compare the weather in Paris and London. Which is warmer?")
+```
+
+When you run this, here's what happens internally:
+
+1. The LLM sees your question
+2. It generates Python code to solve the problem:
+   ```python
+   paris_weather = get_weather("Paris")
+   london_weather = get_weather("London")
+   
+   paris_temp = float(paris_weather.split("Temperature: ")[1].split("°")[0])
+   london_temp = float(london_weather.split("Temperature: ")[1].split("°")[0])
+   
+   if paris_temp > london_temp:
+       answer = f"Paris is warmer ({paris_temp}°) than London ({london_temp}°)"
+   else:
+       answer = f"London is warmer ({london_temp}°) than Paris ({paris_temp}°)"
+   ```
+3. The code executes in a sandboxed environment
+4. The agent sees the output
+5. If something goes wrong, it rewrites the code and tries again
+
+**Use CodeAgent for:**
+- Complex tasks (multi-step workflows)
+- Tasks requiring loops or conditionals
+- Problems that need creative tool combinations
+- When reliability is more important than speed
+
+**Trade-offs:**
+- Slower (code generation adds latency)
+- More tokens (code is verbose)
+- Need a sandbox environment (for security)
+- Can fail if code is malformed
+
+## Building Your First Agent: Weather Researcher
+
+Let's build a simple weather agent using `ToolCallingAgent`. This teaches you the full pattern.
+
+### Step 1: Define Your Tools
+
+Tools are Python functions. That's it.
+
+```python
+import requests
+from typing import Optional
+
+def get_current_weather(
+    location: str,
+    unit: str = "celsius"
+) -> dict:
+    """
+    Get the current weather for a location.
+    
+    Args:
+        location: City name (e.g., "Paris", "Tokyo")
+        unit: Temperature unit - "celsius" or "fahrenheit"
+    
+    Returns:
+        dict: Weather data including temperature, condition, humidity
+    """
+    # Using Open-Meteo API (free, no key needed)
+    api_url = "https://api.open-meteo.com/v1/forecast"
+    
+    # In production, you'd geocode the location first
+    # For now, we'll use approximate coordinates
+    coords = {
+        "Paris": (48.8566, 2.3522),
+        "London": (51.5074, -0.1278),
+        "Tokyo": (35.6762, 139.6503),
+        "New York": (40.7128, -74.0060),
+    }
+    
+    if location not in coords:
+        return {"error": f"Location {location} not found"}
+    
+    lat, lon = coords[location]
+    
+    try:
+        response = requests.get(
+            api_url,
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,weather_code,wind_speed_10m,humidity",
+                "temperature_unit": unit
+            }
+        )
+        data = response.json()
+        
+        return {
+            "location": location,
+            "temperature": data["current"]["temperature_2m"],
+            "humidity": data["current"]["humidity"],
+            "wind_speed": data["current"]["wind_speed_10m"],
+            "unit": unit
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_weather_forecast(
+    location: str,
+    days: int = 3
+) -> dict:
+    """
+    Get a multi-day weather forecast.
+    
+    Args:
+        location: City name
+        days: Number of days (1-7)
+    
+    Returns:
+        dict: Forecast data for each day
+    """
+    api_url = "https://api.open-meteo.com/v1/forecast"
+    coords = {
+        "Paris": (48.8566, 2.3522),
+        "London": (51.5074, -0.1278),
+        "Tokyo": (35.6762, 139.6503),
+        "New York": (40.7128, -74.0060),
+    }
+    
+    if location not in coords:
+        return {"error": f"Location {location} not found"}
+    
+    lat, lon = coords[location]
+    
+    try:
+        response = requests.get(
+            api_url,
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+                "forecast_days": min(days, 7)
+            }
+        )
+        data = response.json()
+        
+        forecast = []
+        for i in range(min(days, 7)):
+            forecast.append({
+                "day": i + 1,
+                "high": data["daily"]["temperature_2m_max"][i],
+                "low": data["daily"]["temperature_2m_min"][i],
+                "precipitation": data["daily"]["precipitation_sum"][i]
+            })
+        
+        return {"location": location, "forecast": forecast}
+    except Exception as e:
+        return {"error": str(e)}
+```
+
+Notice: These are normal Python functions. Type hints. Docstrings. Nothing special.
+
+The docstring is the contract. The agent will read it to understand what the function does. The type hints become the parameter schema.
+
+### Step 2: Create the Agent
+
+```python
+from smolagents import ToolCallingAgent, HfApiModel
+
+# Create the language model
+# You can use HuggingFace, OpenAI, Anthropic, or local models
+model = HfApiModel(
+    model_id="meta-llama/Llama-3.1-70b-Instruct",
+    api_token="your_huggingface_api_token"
+)
+
+# Create the agent with your tools
+agent = ToolCallingAgent(
+    model=model,
+    tools=[get_current_weather, get_weather_forecast],
+    max_iterations=5
+)
+```
+
+That's it. You've defined an agent.
+
+### Step 3: Run It
+
+```python
+# Test the agent
+result = agent.run("What's the weather in Paris right now?")
+print(result)
+
+# Another query
+result = agent.run("Compare the weather in Paris and London this week")
+print(result)
+
+# More complex
+result = agent.run(
+    "I'm planning a trip. "
+    "What's the weather in Tokyo for the next 3 days? "
+    "Is it a good time to visit?"
+)
+print(result)
+```
+
+The agent handles it all. It decides which tools to call, in what order, and synthesizes an answer.
+
+## Understanding the Loop
+
+When you call `agent.run()`, here's what happens internally:
+
+1. **Agent thinks:** "What does the user want? Which tools do I need?"
+2. **Agent calls tools:** Makes the function calls needed
+3. **Agent observes:** Gets the results back
+4. **Agent decides:** "Do I have enough information? Do I need more tools?"
+5. **Agent synthesizes:** Generates a final answer
+
+If the answer isn't good enough, the agent loops and gathers more information.
+
+The `max_iterations=5` setting prevents infinite loops.
+
+## Moving to CodeAgent
+
+Once you understand ToolCallingAgent, CodeAgent is a natural next step.
+
+```python
+from smolagents import CodeAgent
+
+# Same tools, different agent
+agent = CodeAgent(
+    model=model,
+    tools=[get_current_weather, get_weather_forecast],
+    max_iterations=10  # CodeAgent typically needs more iterations
+)
+
+# Same interface
+result = agent.run("Is it warmer in Paris or London? By how much?")
+print(result)
+```
+
+The difference: CodeAgent generates Python code instead of making direct function calls. This is more flexible.
+
+For instance, if you ask "Is it warmer in Paris or London?", CodeAgent might generate:
+
+```python
+paris = get_current_weather("Paris")
+london = get_current_weather("London")
+
+paris_temp = paris["temperature"]
+london_temp = london["temperature"]
+
+difference = abs(paris_temp - london_temp)
+warmer = "Paris" if paris_temp > london_temp else "London"
+
+result = f"{warmer} is warmer by {difference}°C"
+```
+
+The agent generates this code, executes it, and returns the result.
+
+## Error Handling
+
+Real tools fail. Your agent needs to handle that.
+
+```python
+def search_api(query: str) -> str:
+    """
+    Search an external API.
+    
+    Args:
+        query: Search query
+    
+    Returns:
+        str: Search results (or error message)
+    """
+    try:
+        response = requests.get(
+            "https://api.example.com/search",
+            params={"q": query},
+            timeout=5
+        )
+        response.raise_for_status()
+        return response.json()["results"]
+    except requests.Timeout:
+        return "API request timed out. Try again."
+    except requests.HTTPError as e:
+        return f"API error: {e.response.status_code}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+```
+
+Return errors as strings. Let the agent see the error and try a different approach.
+
+## Deployment Patterns
+
+Once your agent works locally, how do you deploy it?
+
+### Pattern 1: Batch Job
+
+For analysis, reports, or batch processing:
+
+```python
+import json
+from datetime import datetime
+
+def run_weather_analysis_batch():
+    """Run agent for multiple cities, save results."""
+    cities = ["Paris", "London", "Tokyo", "New York"]
+    results = {}
+    
+    for city in cities:
+        result = agent.run(
+            f"Get the weather forecast for {city} for the next 3 days"
+        )
+        results[city] = result
+    
+    # Save to file
+    with open(f"weather_analysis_{datetime.now().isoformat()}.json", "w") as f:
+        json.dump(results, f, indent=2)
+
+# Schedule this with cron or a task queue
+run_weather_analysis_batch()
+```
+
+### Pattern 2: REST API
+
+For real-time queries:
+
+```python
+from fastapi import FastAPI, BackgroundTasks
+import asyncio
+from uuid import uuid4
+
+app = FastAPI()
+jobs = {}  # In production, use Redis
+
+@app.post("/agent/query")
+async def query_agent(question: str, background_tasks: BackgroundTasks):
+    """Submit a query to the agent."""
+    job_id = str(uuid4())
+    
+    # Store job state
+    jobs[job_id] = {
+        "status": "running",
+        "result": None,
+        "error": None
+    }
+    
+    # Run agent in background
+    background_tasks.add_task(run_agent_task, job_id, question)
+    
+    return {"job_id": job_id}
+
+async def run_agent_task(job_id: str, question: str):
+    """Run agent and store result."""
+    try:
+        result = agent.run(question)
+        jobs[job_id]["result"] = result
+        jobs[job_id]["status"] = "completed"
+    except Exception as e:
+        jobs[job_id]["error"] = str(e)
+        jobs[job_id]["status"] = "failed"
+
+@app.get("/agent/status/{job_id}")
+async def get_status(job_id: str):
+    """Check job status."""
+    if job_id not in jobs:
+        return {"error": "Job not found"}
+    return jobs[job_id]
+```
+
+Client side:
+```python
+import requests
+import time
+
+# Submit query
+response = requests.post(
+    "http://localhost:8000/agent/query",
+    params={"question": "What's the weather in Paris?"}
+)
+job_id = response.json()["job_id"]
+
+# Poll for result
+while True:
+    status = requests.get(f"http://localhost:8000/agent/status/{job_id}")
+    if status.json()["status"] == "completed":
+        print(status.json()["result"])
+        break
+    time.sleep(1)
+```
+
+This pattern is production-ready. Your users get immediate feedback (the job ID) and can check back without blocking.
+
+## Key Takeaways
+
+1. **Tools are just functions.** No special decorators needed (though Smolagents has them).
+2. **Agents are loops.** Observe → Reason → Act → Observe.
+3. **Simplicity is a feature.** You understand what the agent is doing.
+4. **Pick the right agent type.** ToolCallingAgent for simple tasks, CodeAgent for complex.
+5. **Plan for deployment.** Batch jobs or async APIs depending on your use case.
+
+## Common Pitfalls
+
+- **Tool overload:** Don't give the agent 50 tools. Keep it to 3-5. More tools = more confusion.
+- **Vague queries:** Agent confusion stems from unclear user input. Better prompts = better agents.
+- **No error handling:** Assume tools will fail. Build resilience into tools and prompts.
+- **Ignoring tokens:** Monitor token usage. Know your costs.
+- **No evaluation:** Test your agent on real queries. Measure success.
+
+## What's Next?
+
+Smolagents is great for prototyping and simple agents. For production systems with complex state management, you'll likely graduate to LangGraph.
+
+But start here. Build a simple agent. Get it working. Deploy it. *Then* optimize.
+
+## Recommended Further Reading
+
+- **Smolagents docs:** [HuggingFace Docs](https://huggingface.co/docs/smolagents/)
+- **Tool definitions:** [Tool Guide](https://huggingface.co/docs/smolagents/tools)
+- **Model selection:** [Model options](https://huggingface.co/docs/smolagents/models)
+- **Examples:** [GitHub Repository](https://github.com/huggingface/smolagents/tree/main/examples)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 3 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/PLACEHOLDER)**
+
+---
+
+**Built an agent with Smolagents?** Share your project. Tweet [@maros_janco](https://twitter.com/maros_janco) or email maros@marosjanco.com. I want to see what you're building.
