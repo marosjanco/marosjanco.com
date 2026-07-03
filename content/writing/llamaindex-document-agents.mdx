@@ -1,0 +1,285 @@
+---
+title: "LlamaIndex: Giving Agents Your Documents"
+date: "2026-07-03"
+summary: "The five-stage RAG pipeline: loading, indexing, storing, querying, evaluating. LlamaParse, chunking trade-offs, query engines as agent tools, and picking your framework."
+tags: ["llamaindex", "rag", "agents", "python", "retrieval"]
+draft: false
+---
+
+# LlamaIndex: Giving Agents Your Documents
+
+Your LLM is genuinely brilliant. It can explain quantum tunneling, write a sonnet, and reason through a logic puzzle before you finish your coffee. But ask it what your catering contracts say about confidentiality, and you get one of two things: a polite admission of ignorance, or worse — a confident, fluent, completely fabricated answer.
+
+Those contracts live in a folder of scanned PDFs with tables, signatures, and appendices, and the model was trained long before any of them existed. That gap — between a model that knows *everything in general* and *nothing about your stuff in particular* — is the single most common problem in applied AI.
+
+LlamaIndex was built, from the ground up, to close it.
+
+## Do You Even Need a Framework?
+
+Honest answer: not always. If your application is a straightforward chain of prompts, plain Python with direct API calls is simpler and more transparent. No magic.
+
+But as complexity grows, you rebuild the same plumbing over and over: an engine to talk to the LLM, a tool collection, a parser to pull tool calls out of model output, system prompts that stay in sync with those tools, memory management, retry logic. When you're writing all of that by hand for the third time, a framework earns its keep. Frameworks are a response to complexity, not a starting requirement.
+
+LlamaIndex organizes itself into three pillars — hold this trio in your head for the whole post:
+
+1. **Components** — the raw materials: prompts, models, databases, connectors.
+2. **Agents and tools** — tools give capabilities; agents pick them up and decide when to use them.
+3. **Workflows** — event-driven, step-by-step processes that structure agentic behavior.
+
+Why pick LlamaIndex over the alternatives? Four distinguishing features: the event-driven, async-first workflow system; seamless integration with **LlamaParse**, a managed parsing service for brutal PDFs; battle-tested components hammered on since the earliest days of RAG (many get used inside other frameworks too); and **LlamaHub** — hundreds of community integrations. The packaging convention makes installs guessable: `llama-index-llms-huggingface-api`, `llama-index-vector-stores-chroma`. Component type plus integration name, lowercase, dash-joined.
+
+## The Five-Stage RAG Pipeline
+
+Here's the core idea, stated plainly: LLMs are trained on general knowledge but lack current information, proprietary data, and domain specifics. RAG — retrieval augmented generation — solves this by *finding relevant information in your data and giving it to the LLM at the moment it answers*. No retraining, no fine-tuning. What a good research assistant does: pull the right page out of the archive and lay it on the desk before answering.
+
+The pipeline has five stages, and each is a decision point where quality is won or lost: **loading, indexing, storing, querying, evaluating.**
+
+### Stage 1: Loading
+
+Data is messy. It lives in files, databases, APIs, wikis. Three on-ramps:
+
+```python
+from llama_index.core import SimpleDirectoryReader
+
+# The workhorse: point it at a folder, get document objects back.
+reader = SimpleDirectoryReader(input_dir="./manor_archive")
+documents = reader.load_data()
+```
+
+`SimpleDirectoryReader` walks the folder, figures out what each file is — text, PDF, Word, markdown — and hands back document objects with text extracted and metadata attached.
+
+When the simple reader gives you word salad — the scanned contract with a multi-page table, the two-column PDF with a chart in the middle — route those files through **LlamaParse**:
+
+```python
+from llama_parse import LlamaParse
+
+parser = LlamaParse(api_key="llx-...", result_type="markdown")
+documents = parser.load_data("./manor_archive/catering_contract.pdf")
+```
+
+LlamaParse preserves structure — headings, tables, lists — so what comes out still reads like a document rather than a ransom note. For a contract, that's the difference between payment terms in a readable table and payment terms smeared across three unrelated lines. (It's a paid, managed service from the LlamaIndex team, which is why the integration is so smooth.)
+
+Third on-ramp: **LlamaHub**, for everything that isn't a file on disk — Slack, GitHub, SQL, Notion, hundreds of connectors. Loading is a quality gate: the best chunking and embedding in the world cannot recover information your loader dropped on the floor.
+
+Vocabulary moment: in LlamaIndex, a **document** is the whole file — the entire forty-page contract. A **node** is a chunk of that document, sized for retrieval, carrying metadata linking back to its source. Documents are what you load. Nodes are what you actually index and search.
+
+### Stage 2: Indexing
+
+Two sub-steps: chunking and embedding.
+
+**Why chunk at all?** Models have context limits, so you can't staple the whole archive to every question. And more importantly, retrieval precision: if your searchable unit is a forty-page contract, any question about page thirty drags in thirty-nine pages of noise. You want pieces small enough to be specific, big enough to be meaningful.
+
+**Why embed?** Each chunk goes through an embedding model that converts text into a vector — a position in high-dimensional space where *similar meanings land near each other, even with zero shared words*. A chunk about payment terms and a query about when invoices are due end up close together. That's what lets retrieval go beyond keyword matching.
+
+LlamaIndex wraps both in an **ingestion pipeline**:
+
+```python
+from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+pipeline = IngestionPipeline(
+    transformations=[
+        SentenceSplitter(chunk_size=512, chunk_overlap=20),
+        HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5"),
+    ]
+)
+nodes = pipeline.run(documents=documents)
+```
+
+The `SentenceSplitter` cuts documents into ~512-token chunks while respecting sentence boundaries, with a 20-token overlap so an idea straddling a boundary appears whole in at least one chunk. The embedder — BAAI's `bge-base-en-v1.5` — is open, free to run, and a strong general-purpose choice; because it's just a component, you can swap it later without touching the rest of the pipeline.
+
+Those two knobs — size and overlap — are a genuine trade-off. Small chunks are precise (nearly everything in a matching chunk is relevant) but myopic — a small chunk might say "the fee shall be paid within thirty days" without containing *which fee* or *by whom*. Large chunks carry context but are diluted — they match many queries weakly rather than a few strongly, and burn more context window when retrieved. There's no universal right answer; 512 is a sensible default, and the homework below will make you move the dial yourself.
+
+Why a *pipeline* rather than loose steps? Because ingestion is rarely a one-time event — documents get added, updated, re-processed. One declared, repeatable pipeline is the difference between a system and a pile of code. And true to the framework's async-first design, pipelines can process documents concurrently — which you'll appreciate the day your archive stops being ten files and becomes ten thousand.
+
+### Stage 3: Storing
+
+Embedding isn't cheap; you don't want to redo it on every restart. Persist:
+
+```python
+import chromadb
+from llama_index.vector_stores.chroma import ChromaVectorStore
+
+db = chromadb.PersistentClient(path="./manor_chroma_db")
+collection = db.get_or_create_collection("manor_archive")
+vector_store = ChromaVectorStore(chroma_collection=collection)
+```
+
+Chroma can run in memory for experiments or persist to disk for real use — and because vector stores are just components, graduating to a hosted database later is a swap, not a rewrite.
+
+### Stage 4: Querying
+
+Build the index — the central abstraction of the whole framework, it's in the name:
+
+```python
+from llama_index.core import VectorStoreIndex
+
+embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
+index = VectorStoreIndex.from_vector_store(vector_store, embed_model=embed_model)
+```
+
+One detail that matters: the index embeds queries **with the same model** used for the chunks. Query and documents must live in the same vector space or nothing lines up.
+
+The index exposes a ladder of three interfaces — climb only as high as your use case demands:
+
+```python
+from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
+
+llm = HuggingFaceInferenceAPI(model_name="Qwen/Qwen2.5-Coder-32B-Instruct")
+
+# Rung 1 — pure retrieval, no generation. Your debugging interface.
+retriever = index.as_retriever(similarity_top_k=5)
+chunks = retriever.retrieve("What do our catering contracts say about confidentiality?")
+
+# Rung 2 — full RAG in a box: retrieve, stuff into prompt, synthesize.
+query_engine = index.as_query_engine(llm=llm, response_mode="compact")
+answer = query_engine.query("What do our catering contracts say about confidentiality?")
+
+# Rung 3 — multi-turn conversation with memory.
+chat_engine = index.as_chat_engine(llm=llm)
+chat_engine.chat("Tell me about the catering company.")
+chat_engine.chat("What about their confidentiality obligations?")  # "their" resolves
+```
+
+The ladder is really a ladder of delegated responsibility: retrieval only; retrieval plus one-shot generation; retrieval plus generation plus memory. When your RAG system gives bad answers, the first diagnostic question is always *did retrieval even find the right chunks?* — and the retriever rung lets you look at exactly that.
+
+That word *synthesize* hides another dial: the **response mode**. `refine` works through chunks sequentially, drafting from the first and refining with each subsequent one — thorough, but an LLM call per step. `compact` (the default) packs as many chunks as fit into as few prompts as possible. `tree_summarize` builds an answer hierarchically across many chunks — best for broad questions ("give me an overview of all vendor obligations") rather than needle-in-a-haystack ones. Same retrieval, different synthesis strategies, different cost and quality profiles. And query engines can be awaited (`aquery`), so a real service isn't blocking a thread while the LLM thinks.
+
+### Stage 5: Evaluating
+
+The stage everybody skips and nobody should. LlamaIndex ships evaluators — components whose whole job is judging responses:
+
+```python
+from llama_index.core.evaluation import FaithfulnessEvaluator
+
+evaluator = FaithfulnessEvaluator(llm=llm)
+result = evaluator.evaluate_response(response=answer)
+print(result.passing)  # does the answer actually follow from the sources?
+```
+
+Three dimensions: **faithfulness** (does the answer follow from the retrieved material, or did the model embellish? — your hallucination detector), **relevance** (does it address the question asked?), and **correctness** (is it factually right?). These evaluators are typically LLM-powered themselves — a model grading a model — which sounds circular but works surprisingly well, because judging an answer against provided source text is an easier task than producing the answer. Wire in evaluation before you ship, not after the first incident.
+
+## From Pipeline to Agent
+
+Notice something: everything so far is *reactive*. The query engine answers when asked. It never decides anything. How does this document machinery become something an agent can wield?
+
+One of the cleanest moves in the framework: **wrap the query engine as a tool.**
+
+```python
+from llama_index.core.tools import QueryEngineTool
+
+archive_tool = QueryEngineTool.from_defaults(
+    query_engine=query_engine,
+    name="manor_archive_search",
+    description=(
+        "Useful for answering questions about Wayne Manor's contracts, "
+        "staff records, and household documents."
+    ),
+)
+```
+
+That one tool encapsulates the *whole pipeline* — loading, chunking, embedding, retrieval, synthesis — behind a single describable capability. Now an agent can look at an incoming request and decide whether to use it. Question about the weather? The agent doesn't touch the archive. Question about the catering contract? It formulates a search, invokes the engine, reads the result, and — this is the agentic part — decides whether that's enough. If the first answer is incomplete, it queries again with a sharper question. Retrieval stops being a one-shot lookup and becomes something the agent *reasons about*. That's the seed of agentic RAG, and it's the entire subject of [the next post](/writing/agentic-rag-retrieval-that-thinks).
+
+```python
+from llama_index.core.agent.workflow import AgentWorkflow
+
+agent = AgentWorkflow.from_tools_or_functions(
+    [archive_tool],
+    llm=llm,
+    system_prompt="You are Alfred, butler of Wayne Manor.",
+)
+response = await agent.run("Which catering contracts include a confidentiality clause?")
+```
+
+Two agent flavors hold these tools. **Function-calling agents** lean on the model's native tool-calling ability — reliable and efficient when supported. **ReAct agents** work with any capable model via the prompting pattern: write out reasoning, choose an action, observe, loop — more transparent and more portable, at the cost of tokens and some parsing fragility. Rule of thumb: use native function calling if your model has it; ReAct is the legible fallback. Either way, LlamaIndex agents are conversational by default and can juggle multiple tools — the archive search in one hand, a calculator or web search in the other.
+
+## Workflows: Less Flowchart, More Nervous System
+
+When one agent with a bag of tools isn't structure enough, LlamaIndex offers its **event-driven workflow** system — and it's a genuinely different shape from LangGraph. In [LangGraph](/writing/langgraph-thinking-in-graphs) you draw the map: nodes, edges, explicit transitions. In a LlamaIndex workflow you write *steps*, and each step declares which **event** it responds to and emits new events when it finishes:
+
+```python
+from llama_index.core.workflow import Event, StartEvent, StopEvent, Workflow, step
+
+class ParsedDocEvent(Event):
+    text: str
+
+class ArchiveWorkflow(Workflow):
+    @step
+    async def parse(self, ev: StartEvent) -> ParsedDocEvent:
+        text = await parse_document(ev.file_path)
+        return ParsedDocEvent(text=text)
+
+    @step
+    async def summarize(self, ev: ParsedDocEvent) -> StopEvent:
+        summary = await llm.acomplete(f"Summarize:\n{ev.text}")
+        return StopEvent(result=str(summary))
+
+result = await ArchiveWorkflow(timeout=60).run(file_path="contract.pdf")
+```
+
+A start event kicks things off; a stop event ends the run and carries the result. Branching is emitting one event type versus another. Looping is emitting an event an earlier step listens for. Because the whole thing is async-first, independent steps run concurrently without you managing anything — and workflows can host agents inside them, so a structured, observable process can have steps that are themselves agentic.
+
+## Which Framework, Then?
+
+You've now met all three of the course's frameworks. The honest framing:
+
+| Framework | Center of gravity | Best for |
+|---|---|---|
+| [Smolagents](/writing/smolagents-code-first-agents) | The reasoning loop | Rapid experimentation, code-first simplicity |
+| [LangGraph](/writing/langgraph-thinking-in-graphs) | The process | Explicit control flow, approvals, state, compliance |
+| LlamaIndex | The data | Document parsing, retrieval, knowledge-base integration |
+
+The question is not "which framework is best" — it's **where the center of gravity of your problem sits**. If the hard part is the reasoning loop, smolagents. If the hard part is the process — approvals, recovery, auditability — LangGraph. If the hard part is the data — a mountain of documents that must be parsed, indexed, and retrieved well before any agent can be smart about them — LlamaIndex.
+
+And critically, these tools compose rather than compete. Nothing stops a LangGraph node from calling a LlamaIndex query engine. Mature teams mix them exactly that way: LlamaIndex owns the data layer, something else owns control flow. There's no wrong door.
+
+## Try This Yourself
+
+Doable in an evening:
+
+1. **Gather your own documents.** Not a demo dataset — yours. Your lease, papers you've been meaning to read, onboarding docs, old invoices. Ten to twenty files. Real documents come with real mess, and the mess is where the learning is.
+2. **Build the pipeline:** directory reader → ingestion pipeline (SentenceSplitter at 512, bge-base embeddings) → Chroma → `VectorStoreIndex`. It's maybe fifteen lines, and every line maps to a stage you now understand.
+3. **Ask three questions:** one easy fact stated plainly in one document; one that needs synthesis across chunks; and one trick question your documents *don't* answer — does it admit ignorance or start improvising? For each answer, drop to `as_retriever` with top-k 5 and inspect the actual chunks. Ask yourself: would *I* have answered from these five snippets? You'll learn more about RAG from that one inspection habit than from any blog post.
+4. **Change the chunk size and rebuild.** Cut to 256, re-ingest, ask the same questions. Push to 1024, do it again. Watch the answers shift and the retrieved chunks change. You'll physically feel the precision-versus-context trade-off — and chunk size will never again be a number you copy from a tutorial.
+
+## Key Takeaways
+
+1. **RAG exists because LLMs know everything in general and nothing about your data in particular.** The fix isn't retraining — it's retrieval at answer time.
+2. **The pipeline has five stages — loading, indexing, storing, querying, evaluating — and each is a quality gate.**
+3. **The index is a ladder of interfaces:** retriever for raw chunks, query engine for one-shot answers, chat engine for conversation. Climb only as high as needed; drop to the retriever to debug.
+4. **A query engine wrapped as a tool turns your document pipeline into a capability an agent can choose to use.** That one wrap is where RAG stops being a lookup and becomes agentic.
+5. **Framework choice follows your problem's center of gravity** — and real systems mix frameworks.
+
+## What's Next?
+
+In [Agentic RAG: Retrieval That Thinks](/writing/agentic-rag-retrieval-that-thinks), we give this machinery judgment: an agent that plans its retrievals, rewrites queries, evaluates what came back, and goes hunting again when unsatisfied.
+
+## Recommended Further Reading
+
+- **HuggingFace Agents Course:** [Unit 2.2 — LlamaIndex](https://huggingface.co/learn/agents-course)
+- **LlamaIndex docs:** [docs.llamaindex.ai](https://docs.llamaindex.ai/)
+- **LlamaHub:** [llamahub.ai](https://llamahub.ai/)
+- **Course organization:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 7 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/62F6Qe1YOUR2dJrX8t3Rxk)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/episode/62F6Qe1YOUR2dJrX8t3Rxk?utm_source=generator"
+  width="100%"
+  height="232"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+---
+
+**Pointed a directory reader at that folder of PDFs you've been ignoring?** Tell me what you found. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com. I want to see what you're building.

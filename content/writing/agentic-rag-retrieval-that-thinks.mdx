@@ -1,0 +1,295 @@
+---
+title: "Agentic RAG: Retrieval That Thinks"
+date: "2026-07-03"
+summary: "Why one-shot RAG pipelines fail, and what changes when retrieval becomes a tool the agent wields. The gala example, tool descriptions as routing logic, and hybrid search."
+tags: ["agentic-rag", "rag", "agents", "retrieval", "smolagents"]
+draft: false
+---
+
+# Agentic RAG: Retrieval That Thinks
+
+It's the night of the most extravagant gala of the century. The manor is glowing, the string quartet is tuning up, and your agent is greeting guests at the door. A woman in an emerald gown leans in and asks: "Remind me — who is Lady Ada Lovelace, and why is she on the guest list?"
+
+Here's the thing. The agent could search the entire web all night and never answer that question. Not because the web doesn't know who Ada Lovelace was — of course it does — but because the question isn't really about history. It's about *this party*. Why is she on this guest list? What's her relationship to the host? That information lives in exactly one place: a private guest database no search engine has ever crawled and never will.
+
+Ten minutes later, someone asks whether the fireworks should go off at ten or be moved indoors. Now the situation is exactly reversed. No private database on earth knows tonight's weather. That answer only exists out there, live, right now.
+
+One host. Two questions. Two completely different kinds of knowledge — one private and frozen, one public and constantly changing. A system that can only do one kind of lookup fails half the party. A system that knows *which lookup to reach for, and when, and how to combine them* — that's agentic RAG.
+
+## Where Classic RAG Falls Short
+
+You know the diagram. A question comes in, gets embedded into a vector, a similarity search runs over your document store, the top chunks get stapled into the prompt, and the model answers. Retrieve once, generate once, done.
+
+For simple questions over a well-organized collection, that genuinely works — [the previous post](/writing/llamaindex-document-agents) built exactly this pipeline, and RAG remains one of the most useful patterns in applied AI. But look at the *shape* of it. Classic RAG is a conveyor belt. Every query, no matter what it is, gets the exact same treatment: one retrieval pass, one fixed strategy, then generation. That rigidity fails in four predictable ways.
+
+**1. The one-shot problem.** You get exactly one retrieval attempt. If the top chunks are wrong or half-relevant, tough luck — the model generates from whatever it got. When you research something yourself, you look at the results, go "hmm, that's not quite it," and search again with better words. Classic RAG can't do that "hmm." It has no hmm.
+
+**2. Vocabulary mismatch.** Users don't phrase questions the way answers are phrased in documents. A user asks "how do birds fly"; the document that answers it is titled "avian aerodynamics and flight mechanisms." Those may or may not land close in embedding space. A human librarian translates the question into the vocabulary of the archive. A one-shot pipeline just... hopes.
+
+**3. No judgment.** The pipeline never evaluates what it retrieved. It can't look at five chunks and say "these are about the wrong product entirely." Retrieved context goes straight into the prompt, relevant or not. Garbage in, confident-sounding garbage out.
+
+**4. Sometimes retrieval isn't needed at all.** The user says "thanks, that was helpful," and the pipeline dutifully embeds it, searches the knowledge base, and staples three random chunks about return policies into the prompt. It retrieves because retrieving is all it knows how to do.
+
+## The Fix: Retrieval as a Tool, Not a Stage
+
+The core idea, the one sentence to keep if you keep nothing else: **stop treating retrieval as a pipeline stage, and start treating it as a tool the agent can choose to wield.**
+
+Remember the agent loop — thought, action, observation, repeat. Put a retriever *inside* that loop as one of the available actions, and everything the pipeline couldn't do falls out for free:
+
+- The agent decides **when** to retrieve — and when not to.
+- The agent decides **what** to retrieve, reformulating queries into the archive's vocabulary.
+- The agent **judges the results** at the observation step: good enough, or search again sharper?
+- The agent can run **multiple rounds** — broad first, then targeted follow-ups based on what round one revealed.
+- The agent **combines retrieval with other tools** — web search, APIs, calculators — because the knowledge base is just one tool on the belt.
+
+Same ingredients — retriever, model, documents. Completely different control flow. The intelligence moved from the pipeline designer to the agent at runtime.
+
+Watch it on a worked example. A guest asks: *what should I discuss with the ambassador from France?* An agentic system recognizes this isn't one lookup — it's a small research project. It plans multiple searches: the ambassador's profile from the guest database, current France-related news from the web, the wine details from the event info. It retrieves, finds common ground in culture and gastronomy, and synthesizes conversation suggestions — adapting with further retrievals if the conversation drifts.
+
+Count the retrievals: three, four, five — across two different sources, private and public, with a reasoning step between each deciding what to fetch next. That's not a pipeline. That's a concierge.
+
+## Building the Gala Brain
+
+The course builds this as a set of tools. Let's build it in smolagents (the course also ships LlamaIndex and LangGraph tracks — more on that below).
+
+### Tool 1: The guest information retriever
+
+The data: a small invitee dataset, each entry with four fields — name, relation to the host, description, email. Small, structured, private. The stuff no search engine has.
+
+```python
+import datasets
+from langchain_core.documents import Document
+from langchain_community.retrievers import BM25Retriever
+from smolagents import Tool
+
+guest_dataset = datasets.load_dataset("agents-course/unit3-invitees", split="train")
+
+docs = [
+    Document(
+        page_content="\n".join([
+            f"Name: {guest['name']}",
+            f"Relation: {guest['relation']}",
+            f"Description: {guest['description']}",
+            f"Email: {guest['email']}",
+        ]),
+        metadata={"name": guest["name"]},
+    )
+    for guest in guest_dataset
+]
+```
+
+Each guest becomes one readable blob, so a single retrieved document tells the agent everything about that person in one shot. Charmingly mundane — most retrieval systems begin with exactly this kind of unglamorous data massaging.
+
+Now the retriever, and here's a deliberate engineering decision worth pausing on: **no embeddings.** The course uses BM25 — a classic keyword-ranking algorithm, the same family of scoring that powered search engines for decades before neural networks. It weighs rare words heavily, adjusts for document length, and ranks by term overlap. No embedding model, no vector database, no GPU.
+
+Why is that right here? Think about the queries: "Tell me about Lady Ada Lovelace." "Who is Dr. Nikola Tesla?" They contain *names* — exact, distinctive strings — and the documents contain those same strings. A name is the one thing you never want fuzzy-matched; you want the document that literally contains it. Add a corpus of a few hundred guests, and hauling in an embedding pipeline would be pure ceremony. The broader lesson, one of my favorites in the whole course: **match the retrieval method to the data and the queries, not to whatever is fashionable.** Sometimes the state of the art for your problem is an algorithm older than the web.
+
+Wrap it as a tool:
+
+```python
+class GuestInfoRetrieverTool(Tool):
+    name = "guest_info_retriever"
+    description = (
+        "Retrieves detailed information about gala guests "
+        "based on their name or relation."
+    )
+    inputs = {
+        "query": {
+            "type": "string",
+            "description": "The name or relation of the guest you want information about.",
+        }
+    }
+    output_type = "string"
+
+    def __init__(self, docs):
+        super().__init__()
+        self.retriever = BM25Retriever.from_documents(docs, k=3)
+
+    def forward(self, query: str) -> str:
+        results = self.retriever.invoke(query)
+        if results:
+            return "\n\n".join(doc.page_content for doc in results)
+        return "No matching guest information found."
+
+guest_info_tool = GuestInfoRetrieverTool(docs)
+```
+
+Even the "nothing found" message matters: an honest empty result lets the agent try a different tool or rephrase, instead of hallucinating a guest who doesn't exist.
+
+### The most underrated line of code in the unit
+
+Linger on that `description` field. It's not documentation for you. **It's documentation for the agent.** When a question arrives, the model reads the descriptions of every tool on its belt and reasons about which one fits. *The description is the routing logic.* Write "retrieves detailed information about gala guests based on their name or relation," and the agent correctly reaches for this tool on guest questions — and correctly ignores it for weather questions. Write "searches data," and the agent misuses it in both directions.
+
+In agentic RAG, prompt engineering partly becomes **tool description engineering**. When your agent picks the wrong tool, the first place to look is not the model — it's your descriptions.
+
+### Tools 2–4: The rest of the belt
+
+**Web search** — the mirror image of the guest retriever. It knows almost everything *except the things that make this party this party*:
+
+```python
+from smolagents import DuckDuckGoSearchTool
+
+search_tool = DuckDuckGoSearchTool()
+```
+
+**Weather** — for the fireworks call. The course makes this one a dummy, deliberately:
+
+```python
+import random
+
+class WeatherInfoTool(Tool):
+    name = "weather_info"
+    description = "Fetches weather information for a given location."
+    inputs = {
+        "location": {"type": "string", "description": "The location to get weather for."}
+    }
+    output_type = "string"
+
+    def forward(self, location: str) -> str:
+        conditions = [
+            {"condition": "Clear skies", "temp_c": 18},
+            {"condition": "Rainy", "temp_c": 15},
+            {"condition": "Windy", "temp_c": 20},
+        ]
+        data = random.choice(conditions)
+        return f"Weather in {location}: {data['condition']}, {data['temp_c']}°C"
+```
+
+Why teach with a fake? Because the lesson isn't meteorology — it's the integration pattern. The tool's shape (name, description, typed input, string output) is identical whether the inside is a random picker or a real weather API. Build around the dummy, verify the routing, then swapping in a real provider is a change inside one method. Design the interface first; upgrade the implementation whenever.
+
+**Hub stats** — my favorite for pure flavor. The gala is crawling with AI builders, and the host wants to impress them:
+
+```python
+from huggingface_hub import list_models
+
+class HubStatsTool(Tool):
+    name = "hub_stats"
+    description = (
+        "Fetches the most downloaded model from a specific author "
+        "on the Hugging Face Hub."
+    )
+    inputs = {
+        "author": {"type": "string", "description": "The Hub username or organization."}
+    }
+    output_type = "string"
+
+    def forward(self, author: str) -> str:
+        models = list(list_models(author=author, sort="downloads", direction=-1, limit=1))
+        if not models:
+            return f"No models found for author {author}."
+        model = models[0]
+        return f"{model.id} — {model.downloads:,} downloads"
+```
+
+Look past the party trick at what it represents: **retrieval from a structured, live API.** Not documents, not search results — an endpoint with parameters and sorted results. Your equivalent might be a customer database, an inventory system, an internal metrics service. Done right, the R in RAG quietly stops meaning "vector search" and starts meaning *any way of getting real information into the loop*.
+
+### Final assembly
+
+```python
+from smolagents import CodeAgent, InferenceClientModel
+
+model = InferenceClientModel(model_id="Qwen/Qwen2.5-Coder-32B-Instruct")
+
+alfred = CodeAgent(
+    tools=[guest_info_tool, search_tool, WeatherInfoTool(), HubStatsTool()],
+    model=model,
+)
+
+alfred.run("Tell me about our guest named Lady Ada Lovelace.")
+```
+
+The flow in slow motion: the agent reads the question, thinks *this is about a specific guest — I have a tool whose description says it retrieves guest information — call it*. BM25 races through the documents, the name matches hard, and back comes the full entry: best friend, esteemed mathematician, celebrated as the first computer programmer, plus her email. The agent observes, judges the result sufficient, and composes the answer.
+
+Notice what it did *not* do: it didn't web-search Ada Lovelace. The historical answer would have been factually fine and situationally useless — it wouldn't know she's the host's best friend. **Private questions get the private tool.** The principle generalizes to every serious system: your internal docs are private — the web will never have them; prices, news, and weather are live — your index will never have them.
+
+Now the good one, the question the course builds to:
+
+```python
+alfred.run(
+    "One of our guests is from Qwen. Tell me about them "
+    "and their most downloaded model."
+)
+```
+
+Feel the question split in half? Who is the guest — private, guest retriever. What's their lab's top model — live, Hub stats. The agent runs both, in sequence, then synthesizes a briefing. Two retrievals, two sources, one answer. That's agentic RAG doing something a retrieve-then-generate pipeline *structurally cannot do* — not "does badly," cannot do. The plan itself — call this, then that, then combine — doesn't exist in a pipeline's vocabulary.
+
+One more layer: **memory.** A gala is one long evening, not isolated questions. Reuse the same agent instance and don't reset state between runs (`alfred.run(question, reset=False)` in smolagents), so earlier tool results stay in context. Continuity, plus economy — no re-retrieving what the agent learned an hour ago.
+
+By the way, the course builds this whole gala three times — smolagents, LlamaIndex, LangGraph. Same dataset, same four tools, same behavior. In LlamaIndex the retriever becomes a query engine tool; in [LangGraph](/writing/langgraph-production-agents) the tools hang off nodes in an explicit graph. Which proves the deeper point: **agentic RAG is a pattern, not a framework feature.**
+
+## Retrieval Strategy: Semantic, Keyword, Hybrid
+
+Past toy scale, the interesting question becomes *which retrieval method*.
+
+**Semantic search (embeddings).** Superpower: paraphrase. A query about "getting your money back" finds a document about "refund procedures" with zero shared words. Weakness: precision on exact strings — product codes, statute numbers, error messages, and yes, names can get fuzzed into "close enough" neighbors that aren't the thing you asked for.
+
+**Keyword search (BM25 and friends).** Superpower: precision, speed, zero infrastructure — nothing to keep in sync. Weakness: no notion of meaning. Search "refund" and a document that only says "reimbursement" is invisible.
+
+**Hybrid search.** Run both, fuse the rankings, get paraphrase tolerance *and* exact-match precision. Most serious production systems converge here — speaking as someone who works on a legal search system in my day job, where users paraphrase concepts and cite exact section numbers in the same breath, hybrid is table stakes. The cost is complexity: two indexes, a fusion step, more knobs.
+
+Which to choose? The gala already taught you: interrogate your queries and your corpus. Small corpus, name-heavy queries — keyword. Large messy corpus, paraphrased questions — semantic. High stakes, mixed styles — hybrid, and budget for the tuning.
+
+On top of raw retrieval, a menu of agent behaviors — and what unites them is that they don't need dedicated pipeline machinery; **they emerge from the reasoning loop**:
+
+- **Query reformulation:** "how do birds fly" becomes "avian aerodynamics" — the agent as its own librarian.
+- **Query decomposition:** a comparison question splits into one search per side plus one for direct comparisons. Complex questions are almost never one query in disguise; they're three.
+- **Query expansion:** several phrasings of the same question, results unioned — a little cost for recall you'd otherwise miss.
+- **Multi-step retrieval:** search broad, read, search narrow using what you learned. How humans research, and the single biggest quality unlock over one-shot RAG.
+- **Reranking:** let the fast retriever over-fetch ten candidates, then apply a slower cross-encoder to keep the best few. Cheap wide net, expensive careful sort.
+- **Result validation:** is the source credible? Actually relevant, or just lexically nearby? Do two passages contradict — and should the agent flag that instead of silently picking one?
+
+Two honest operational notes. **Fallbacks:** tools fail — the search API times out, the database hiccups — and an agent should degrade gracefully or say what it couldn't verify, not crash or fabricate. **Cost:** every retrieval round is latency and tokens, so cap your iterations. An agent that can loop is an agent that can loop forever — two documents that reference each other will happily send a naive agent into orbit. Give it a budget: three rounds, then answer with the best you have and be honest about gaps.
+
+## Is It Actually Helping?
+
+The question that separates professionals from demo builders. The metrics: **retrieval accuracy** — on a test set with known answer locations, how often did the right document show up? **Reformulation success** — did round two beat round one? If not, your fancy loop is burning tokens for nothing. **Response quality** — faithful to sources, useful to humans. **Cost efficiency** — retrievals per query; six lookups for one-lookup questions is a prompting problem wearing a quality costume. And **latency**, because a perfect answer that takes ninety seconds is a failed answer in most products.
+
+Even a scrappy evaluation — twenty questions you know the answers to, run monthly — beats vibes.
+
+## Try This Yourself
+
+This is literally the course's hands-on project. Pick your framework track at [the course](https://huggingface.co/learn/agents-course), then four moves:
+
+1. Load the invitee dataset, build the BM25 retriever, wrap it in a tool — and write the tool description yourself, from scratch, before peeking at the course's version.
+2. Sanity check with "tell me about our guest named Lady Ada Lovelace" and confirm from the logs that the agent chose your tool.
+3. Add the web search and weather tools.
+4. The moment that matters: ask one question that needs **two tools at once** — "check whether the weather is good for our fireworks tonight, and tell me which of our guests would most enjoy the show." Read the trace. Watch it call the weather tool, then the guest retriever, then synthesize. Something clicks that no blog post can click for you.
+
+Extra credit: **break it.** Rewrite your retriever's description to something uselessly vague — "searches stuff" — and ask again. Watch the routing fall apart, watch the agent web-search your private guests and hallucinate. Put the good description back, watch order restored. Ten minutes, and you'll never again wonder whether tool descriptions matter.
+
+## Key Takeaways
+
+1. **Classic RAG is a pipeline with no judgment:** one shot, no reformulation, no result evaluation, no ability to skip retrieval. It works until your questions get interesting.
+2. **Agentic RAG makes retrieval a tool inside the reasoning loop.** The agent decides when, what, whether it's good enough, and whether to go again — reformulation, decomposition, and multi-step search all emerge from the loop.
+3. **Know your sources.** Private and stable lives in your knowledge base; public and live comes from outside tools. Well-written tool descriptions are the routing logic — treat them as load-bearing code.
+4. **Match retrieval technique to the problem.** BM25 for exact, name-heavy lookups on small corpora; semantic for paraphrase over large messy corpora; hybrid when stakes are high — with reranking and validation layered on top.
+5. **Retrieval quality is measurable, so measure it** — accuracy, reformulation gains, retrievals per query, latency. And cap your loops, because an agent that can iterate is an agent that can spiral.
+
+## Recommended Further Reading
+
+- **HuggingFace Agents Course:** [Unit 3 — Agentic RAG](https://huggingface.co/learn/agents-course)
+- **Smolagents docs:** [huggingface.co/docs/smolagents](https://huggingface.co/docs/smolagents/)
+- **LlamaIndex docs:** [docs.llamaindex.ai](https://docs.llamaindex.ai/) · **LangGraph docs:** [langchain-ai.github.io/langgraph](https://langchain-ai.github.io/langgraph/)
+- **Course organization:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 8 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/3f95gR17I8JAQoTs6etLIi)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/episode/3f95gR17I8JAQoTs6etLIi?utm_source=generator"
+  width="100%"
+  height="232"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+---
+
+**Built the gala? Broke the tool description?** Tell me what happened. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com. I want to see what you're building.

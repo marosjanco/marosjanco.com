@@ -1,0 +1,255 @@
+---
+title: "Agents in Games: What a Pokémon Battle Teaches You About Production AI"
+date: "2026-07-03"
+summary: "Games are the best agent laboratory ever built. Building an LLM Pokémon battle agent with smolagents, battle tools, an agent-vs-agent leaderboard, and the production lessons hiding inside."
+tags: ["agents", "games", "smolagents", "evaluation", "pokemon", "llm"]
+draft: false
+---
+
+# Agents in Games: What a Pokémon Battle Teaches You About Production AI
+
+Picture a Pokémon battle arena. On one side, a Charizard — big orange fire-breathing dragon — at 75/100 hit points. On the other, a Blastoise, a giant armored turtle with water cannons, at 80/100. And the trainer commanding that Charizard is not a person. It's a large language model.
+
+Here's the part that made me grin the first time I watched one of these battles. The model doesn't just pick a move. It *reasons*. Out loud. In text:
+
+> "My opponent is a Water type. Flamethrower is a Fire move, and Fire is weak against Water, so that attack would hit for reduced damage. Dragon Claw is a Dragon move with decent power and no type penalty here. My health is lower than my opponent's, so I can't afford a wasted turn. I will use Dragon Claw."
+
+That's a language model doing genuine tactical reasoning about elemental matchups, health thresholds, and risk — in a live turn-based battle, against another agent reasoning right back at it. Sometimes the logic is beautiful. Sometimes it confidently talks itself into a Fire attack against a giant water turtle, and you watch a state-of-the-art model faceplant in a children's game from the nineties.
+
+Either way, you learn something real. Because underneath the Pokémon paint job, this is a masterclass in state representation, structured action spaces, latency budgets, and evaluation.
+
+## Why Games Are the Best Agent Laboratory
+
+We've spent a whole course building serious things — retrieval agents, tool-calling assistants, [observability pipelines](/writing/agent-evaluation-observability). Why hand you a Pokémon battle? Five reasons, and each one mirrors a production problem.
+
+**1. A clear, unambiguous reward signal.** You won, or you lost. No arguing with the scoreboard. Compare that to a customer support agent: the user stopped replying — satisfaction or rage-quit? Ambiguous. Games cut through. Change the prompt, play a hundred battles, look at the win rate. That's evaluation heaven, and anyone who has tried to eval a chatbot knows how rare that heaven is.
+
+**2. A bounded, enumerable action space.** At any moment, your agent has a small, finite menu: use one of up to four moves, or switch Pokémon. That's it. Not infinite free text — a menu. This is exactly what function calling and structured outputs are about, and the game engine enforces the discipline by rejecting anything that isn't a legal move.
+
+**3. Immediate, honest feedback.** You pick Flamethrower, the damage lands, the health bar drops, the new state is right there. In production, a bad agent decision might not surface until a churn report a month later. In a game, the world tells you instantly, and it never lies.
+
+**4. Failure is cheap and safe.** Your agent can lose a thousand battles and the total cost is some compute. Nobody's data gets deleted. No lawyer gets a hallucinated citation. Games are a flight simulator for agent design — you rehearse the exact failure modes that would be expensive anywhere else.
+
+**5. Endless, cheap variety.** Every battle is a fresh scenario — different teams, matchups, health trajectories, an opponent doing something you didn't script. Distributional variety for free, which is precisely the thing that's expensive to manufacture in production test suites.
+
+This is why, decades before anyone said "large language model," the milestones of AI were game milestones.
+
+## Three Eras of Game AI
+
+**Era one: scripted AI.** Hand-written rules — behavior trees, finite state machines, decision trees coded by a designer. If player within ten meters, attack. If health below thirty percent, flee. Predictable patterns, limited adaptability. Once you crack the pattern, the opponent stops being an opponent and becomes a puzzle with one solution. Even the classical search engines — Deep Blue beating Kasparov by brute-forcing millions of positions with hand-tuned evaluation functions — were fundamentally scripted judgment executed fast.
+
+**Era two: reinforcement learning.** Instead of telling the agent what to do, you tell it what winning is worth, and it figures out the rest by playing. Trial and error at superhuman scale — AlphaGo learning strategies no human had taught it. The costs: enormous numbers of training games, a black-box policy that can't explain a single choice, and total narrowness. A Go policy knows nothing about chess. Nothing transfers.
+
+**Era three: the agentic era.** The policy is a language model reasoning in text. And what changes is precise:
+
+- **Zero game-specific training.** The model was never trained to battle Pokémon. It read the internet, which contains twenty-five years of type charts and forum arguments about whether Charizard is overrated. You describe the state in plain language; the model brings general world knowledge to bear, zero-shot.
+- **The decision process is legible.** An RL policy gives you a number per action and no explanation. The LLM gives you a paragraph. When it plays badly, you can see exactly where the reasoning derailed — and often fix it by editing a prompt, not retraining. Debugging becomes reading.
+- **Behavior is emergent and adaptive.** An NPC that reasons can improvise in situations designers never enumerated — plus believable dialogue essentially for free.
+- **The tradeoff.** A behavior tree decides in microseconds, a neural policy in milliseconds. An LLM call takes seconds, costs money per decision, and occasionally does something baffling.
+
+## Building the Battle System
+
+The strategic spine of Pokémon is the type chart — a giant rock-paper-scissors matrix where Fire burns Grass, Water douses Fire, Electric zaps Water. Picking the right matchup can nearly double your damage. Here's how the course models it.
+
+### Game State
+
+A battle class owns the whole situation:
+
+```python
+class PokemonBattle:
+    def __init__(self, player_pokemon, agent_pokemon):
+        self.player_pokemon = player_pokemon
+        self.agent_pokemon = agent_pokemon
+        self.turn = 0
+        self.history = []
+
+    def get_state(self) -> dict:
+        """Serialize the current battle situation."""
+        return {
+            "player_pokemon": self.player_pokemon.to_dict(),
+            "agent_pokemon": self.agent_pokemon.to_dict(),
+            "turn": self.turn,
+            "history": self.history,
+        }
+```
+
+Stop and appreciate `get_state`, because it's quietly the most important design decision in the whole unit. **It's the boundary between the world and the mind.** Whatever it returns is literally everything the agent will ever know. If health is in there, the agent can reason about health. If move accuracy isn't, the agent is blind to accuracy no matter how smart the model is. Every agent you'll ever build has a `get_state` equivalent — the context assembly step — and its quality caps your agent's ceiling. Garbage state, garbage decisions, regardless of how many billions of parameters you attach.
+
+### The Type System
+
+```python
+TYPE_ADVANTAGES = {
+    "fire": {
+        "strong_against": ["grass", "bug", "steel"],
+        "weak_against": ["water", "ground", "rock"],
+    },
+    "water": {
+        "strong_against": ["fire", "ground", "rock"],
+        "weak_against": ["grass", "electric"],
+    },
+    "electric": {
+        "strong_against": ["water", "flying"],
+        "weak_against": ["ground"],
+    },
+    # ... and so on
+}
+
+def calculate_type_effectiveness(move_type: str, defender_type: str) -> float:
+    """Return the damage multiplier for a move against a defender."""
+    effectiveness = 1.0  # neutral
+    if defender_type in TYPE_ADVANTAGES[move_type]["strong_against"]:
+        effectiveness = 1.5   # +50% damage
+    elif defender_type in TYPE_ADVANTAGES[move_type]["weak_against"]:
+        effectiveness = 0.67  # roughly two thirds
+    return effectiveness
+```
+
+Three numbers — 1.0, 1.5, 0.67. That's the entire strategic engine. And the beautiful thing about the LLM approach: the model already knows this chart from pretraining. The agent's job is less "learn the rules" and more "apply knowledge it already has to the state in front of it" — which, if you squint, is exactly the job description of every RAG and tool-use agent.
+
+### Moves and Resolution
+
+Each move carries a name, a type, base power (0–100), accuracy, and possibly an effect. Flamethrower: Fire, 90 power, 100 accuracy, may burn. Earthquake: Ground, a full 100 power. So a turn is never just "which move is strongest" — it's power, times type effectiveness, weighed against accuracy and side effects. Genuine multi-factor decision-making in a toy box.
+
+An `execute_moves` function takes both sides' choices, computes damage each way, subtracts hit points, and returns a report. Then the loop: display state, get the player's input, get the agent's decision, execute, update health, check for a winner. Repeat.
+
+Pause on that loop and hear what it actually is. Display state — that's the *observation*. Get the agent's decision — that's the *thought*. Execute the move — that's the *action*. This is the thought-action-observation cycle from [the very first post in this series](/writing/agents-101-what-are-they-why-now), wearing a Charizard costume. Nothing new was invented for this unit. That's the whole point.
+
+## Two Ways to Build the Agent's Brain
+
+### Layer 1: Prompt-Driven Decisions
+
+The simple version builds a prompt from the state each turn:
+
+```python
+def get_agent_move(model, battle_state: dict) -> str:
+    prompt = f"""You are a Pokémon battle trainer.
+
+Your Pokémon: {battle_state['agent_pokemon']['name']} \
+({battle_state['agent_pokemon']['hp']}/100 HP)
+Opponent: {battle_state['player_pokemon']['name']} \
+({battle_state['player_pokemon']['hp']}/100 HP)
+
+Available moves: {battle_state['agent_pokemon']['moves']}
+Type advantages: {get_type_matchup_summary(battle_state)}
+Recent battle history: {battle_state['history'][-3:]}
+
+Choose your next move and explain your strategy."""
+
+    response = model.generate(prompt)
+    return extract_move(response)  # parse prose down to one legal action
+```
+
+Two details carry all the craft here. First, the prompt includes the **last three turns** of history, not the whole battle — deliberate context discipline. Recent history is tactically relevant ("the opponent spammed water attacks twice, they'll probably do it again"); turn one of a long battle is noise. Same skill as trimming conversation history in a chat agent. Second, asking the model to **explain its strategy** isn't decoration. Eliciting reasoning before the decision tends to produce better decisions — the chain-of-thought effect — and it produces a transcript you can debug. When your agent loses, you read its explanations and find the exact turn where the logic went sideways.
+
+### Layer 2: The Full CodeAgent With Battle Tools
+
+The agentic version reaches for [smolagents](/writing/smolagents-code-first-agents) — a `CodeAgent` armed with five battle tools:
+
+```python
+from smolagents import CodeAgent, InferenceClientModel
+
+agent = CodeAgent(
+    model=InferenceClientModel(),
+    tools=[
+        get_pokemon_stats,
+        get_type_advantages,
+        get_available_moves,
+        get_opponent_info,
+        predict_damage,
+    ],
+)
+
+result = agent.run(
+    "My Charizard is at 75/100 HP. The opposing Blastoise is at 80/100. "
+    "My moves are Flamethrower, Dragon Claw, Fly, and Ember. "
+    "What should I use? Explain your strategy."
+)
+```
+
+Now the agent doesn't just vibe an answer from the prompt. It calls `predict_damage` on each candidate move and compares actual numbers. It calls `get_type_advantages` and gets the matchup math instead of half-remembering it. **The decision becomes grounded in tool results rather than the model's fuzzy recollection of a twenty-five-year-old type chart.** Prompt in, tool calls in the middle, one legal action out — the exact architecture of every production tool-use agent, compressed into a video game turn.
+
+Want the industrial-strength version? The competitive community's standard is Pokémon Showdown, and on the Python side the `poke-env` library wraps its protocol: your agent implements one `choose_move`-style method — here's the battle state, give me an action — and the plumbing handles the rest.
+
+## The Arena: Agent vs Agent
+
+An agent with nobody to fight is just an expensive random number generator. So the course goes to the fun place — agent versus agent. A battle runner asks agent one for a move, asks agent two for a move given the same state, executes both, loops until someone's team faints. And once you record results, you can rank:
+
+```python
+class Leaderboard:
+    def __init__(self):
+        self.scores = {}
+
+    def record_win(self, winner: str, loser: str):
+        for name in (winner, loser):
+            self.scores.setdefault(name, {"wins": 0, "losses": 0})
+        self.scores[winner]["wins"] += 1
+        self.scores[loser]["losses"] += 1
+
+    def get_rankings(self):
+        return sorted(
+            self.scores.items(),
+            key=lambda kv: kv[1]["wins"] / max(1, kv[1]["wins"] + kv[1]["losses"]),
+            reverse=True,
+        )
+```
+
+Simple as it is, look at what it gives you: an objective, continuously updated ranking of agent quality. No rubric committee. No vibes. Your prompt design, tool selection, and model choice all get compressed into one number nobody can argue with.
+
+It also enables the most effective development loop I know. Version one: bare-bones prompt. Wins some, loses some. Version two: add the type advantage tool. Win rate climbs. Version three: add battle history so it spots the opponent's habits. Climbs again. Version four: a fancy multi-step reasoning scaffold — and the win rate *drops*, because the extra deliberation occasionally talks the model out of the obviously correct move. You just learned something real about your design, and it cost you nothing but battles. **Iterating against a leaderboard is evolution with a scoreboard.**
+
+Deployment is a menu: Pygame or a Streamlit front end on a free Hugging Face Space for the game, smolagents/LangGraph/LlamaIndex for the brain. The course's hosted arena and its leaderboard live on Hugging Face Spaces — a complete playable AI game in roughly a screen of code, on a free public URL.
+
+## Five Production Lessons
+
+**1. Latency is a design constraint, not an afterthought.** A turn-based battle forgives a three-second think — it even reads as dramatic tension. Real-time play forces the classic conversations: cache common decisions, route routine turns to a small fast model and escalate pivotal ones, keep rules for the obvious, spend model calls on the genuinely ambiguous. Every production agent has this shape. A brilliant-but-slow agent loses to a decent-and-fast one more often than anyone likes to admit.
+
+**2. Structured action spaces make agents reliable.** The engine accepts a move name or a switch — nothing else. If the model returns a heartfelt paragraph about its feelings toward Blastoise, that's not an action. The `extract_move` parser and the engine's validation bridge model prose and machine action. Define legal actions narrowly, parse strictly, decide in advance what happens when parsing fails.
+
+**3. Plan for invalid actions, because they will happen.** The model will name a move the Pokémon doesn't know, or switch to a fainted teammate. Validate against the legal move list; on failure, retry with the error in context ("that move doesn't exist, here are your actual options") or fall back to a safe default. This is malformed-tool-call handling, rehearsed a thousand times an evening with zero consequences. The game engine is the strictest, fairest QA tester you'll ever hire, and it works for free.
+
+**4. Ground decisions in state, not vibes.** `predict_damage` exists because a model asked to estimate damage from memory will confabulate — confidently, fluently, wrongly. Give it a calculator and the decision chain snaps to reality. Any agent whose choices depend on numbers — prices, quotas, account balances, hit points — needs its version of `predict_damage`.
+
+**5. Evaluate with outcomes, not opinions.** The leaderboard doesn't care that your prompt is elegant. Win ratio, sorted descending. In production you rarely get a metric that clean, but the discipline transfers: define what winning means before you build, instrument it, and let the number arbitrate design arguments. Teams that iterate against a metric ship better agents than teams that iterate against taste. Every time.
+
+## Key Takeaways
+
+1. **Games hand you everything production denies you** — crisp win/loss signal, bounded actions, instant honest feedback, safe failure, infinite variety. Train in the gym, compete in the real world.
+2. **The agentic era is different in kind.** Scripts can't adapt, RL can't explain and doesn't transfer — an LLM brings pretrained world knowledge to a game it never trained on and narrates its reasoning while playing.
+3. **The Pokémon battle is the thought-action-observation loop in a trench coat.** `get_state` serializes the world, the model reasons, the engine resolves one legal action, loop.
+4. **Tools turn a guesser into a strategist.** Whatever your domain's version of `predict_damage` is — build it, and make the model call it.
+5. **The leaderboard is the eval philosophy to steal.** An agent you cannot score is an agent you cannot improve.
+
+## What's Next?
+
+The capstone. Everything from the whole course converges into [building a GAIA agent](/writing/gaia-capstone-agent) — the final assignment, the scoring API, and the certificate. And if you haven't set up tracing yet, read [the evaluation and observability post](/writing/agent-evaluation-observability) first — you'll need it to debug your battle agent anyway.
+
+## Further Reading
+
+- **The Agents Course:** [huggingface.co/learn/agents-course](https://huggingface.co/learn/agents-course)
+- **Smolagents docs:** [huggingface.co/docs/smolagents](https://huggingface.co/docs/smolagents/)
+- **Pokémon Showdown:** [pokemonshowdown.com](https://pokemonshowdown.com/)
+- **poke-env library:** [github.com/hsahovic/poke-env](https://github.com/hsahovic/poke-env)
+- **ML for Games course:** [huggingface.co/learn/ml-games-course](https://huggingface.co/learn/ml-games-course)
+- **Course org on Hugging Face:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 10 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/1rLk0VXyk6S50TKpk58nVt)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/episode/1rLk0VXyk6S50TKpk58nVt?utm_source=generator"
+  width="100%"
+  height="232"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+---
+
+**Built a battle agent?** Send me the link — especially if it beats mine. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com.

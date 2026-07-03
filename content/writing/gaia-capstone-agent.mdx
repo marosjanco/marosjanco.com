@@ -1,0 +1,217 @@
+---
+title: "The GAIA Capstone: Building an Agent That Passes the Final Exam"
+date: "2026-07-03"
+summary: "The Agents Course capstone: 20 GAIA level-1 questions, exact-match scoring, a 30% certificate bar. Architecture, the scoring API, answer formatting, and the pitfalls that eat scores."
+tags: ["agents", "gaia", "capstone", "benchmarks", "smolagents", "huggingface"]
+draft: false
+---
+
+# The GAIA Capstone: Building an Agent That Passes the Final Exam
+
+Let me show you a question. As you read it, ask yourself honestly whether you could answer it:
+
+> Which of the fruits shown in the 2008 painting "Embroidery from Uzbekistan" were served as part of the October 1949 breakfast menu for the ocean liner that was later used as a floating prop in the film "The Last Voyage"? Give the items as a comma-separated list, ordering them in clockwise order based on their arrangement in the painting, starting from the 12 o'clock position. Use the plural form of each fruit.
+
+Notice something. Every individual piece is easy. Finding a painting online? Easy. Identifying fruits in an image? Easy. Looking up an old movie and figuring out which ship appeared in it? Easy. Digging up a breakfast menu from 1949? Annoying, but doable. A curious human with a browser and twenty minutes gets there — and when this style of question was benchmarked, **human annotators scored around 92%**.
+
+GPT-4 with plugins, when the benchmark launched? **Around 15%.**
+
+Sit with that gap. Not on olympiad math. Not on graduate physics. On questions that are conceptually simple but require chaining steps — look at an image, search the web, cross-reference a menu, keep track of what you found, and then format the answer *exactly* right. That gap between trivial-for-humans and brutal-for-models is precisely what the GAIA benchmark measures. And it's the boss fight at the end of the Hugging Face Agents Course.
+
+To earn the certificate, you build an agent, point it at a set of real GAIA questions, and score 30% or higher. The best models in the world stumbled here. Here's how you walk in and pass.
+
+## The Assignment
+
+The final project has a beautifully simple shape:
+
+- **Build an agent** — your design, your tools, your framework choice. The course deliberately gives you less scaffolding here; real-world agent development doesn't come with a worked solution.
+- **Run it against 20 questions** drawn from GAIA level 1, the easiest tier.
+- **Submit your answers** to the course's scoring service, which grades with exact-match scoring.
+- **Score 30% or higher** — six correct out of twenty — and you pass, earn the certificate, and land on the public student leaderboard.
+
+Your gut says thirty percent is a failing grade everywhere else on Earth. Reframe it: GPT-4 with plugins launched at roughly 15% on GAIA overall. The threshold asks you to build something that, on the easiest tier, *doubles* what a flagship model with tools managed at launch. It's achievable — many students exceed it significantly — but it's not a participation trophy.
+
+Beyond the score, the grading rubric puts about half the weight on **functionality** (does it actually work end to end), roughly 30% on the **GAIA performance** itself, and the rest on code quality and innovation. The expected submission is a package: documented agent code, a README, tests, evaluation results, and a short lessons-learned writeup — which might be the most valuable artifact you produce, because it turns an assignment into experience.
+
+The suggested workflow runs in five phases: planning, implementation, testing, **evaluation**, submission. Notice evaluation is phase four, not five. You don't submit your first run. You run, diagnose, improve, then submit.
+
+## What GAIA Actually Is
+
+GAIA — introduced by researchers from Meta, Hugging Face, and others — was built around a deliberately contrarian idea. Most benchmarks chase tasks that are hard for humans: professional exams, olympiad problems, obscure graduate knowledge. GAIA flips it. It targets tasks that are **conceptually easy for humans but structurally hard for AI systems**: multi-step reasoning, multiple modalities (images, audio, spreadsheets, documents), web browsing, correct tool use, and a precise, unambiguous final answer.
+
+Humans are natural agents. We decompose, we search, we keep notes, we double-check. Models have to be *architected* into doing all of that.
+
+Three difficulty levels, defined by how much orchestration a question demands:
+
+- **Level 1:** roughly five steps or fewer, minimal tool use. One search, one lookup, one small calculation. This is where the capstone lives.
+- **Level 2:** more steps, multiple tools coordinated — search plus a file plus data wrangling.
+- **Level 3:** long-horizon tasks with arbitrarily long action sequences. The frontier of agent research.
+
+Don't mistake level 1 for trivial. Walk the painting question the way an agent must: find the painting (web search plus image retrieval), identify the fruits (vision, not text), catch the sneaky indirection about the ocean liner used as a film prop (identify the film, *then* the ship), find that ship's October 1949 breakfast menu (needle-in-a-haystack retrieval), intersect the two lists, and finally format — clockwise from 12 o'clock, plural forms. Six steps, each within reach. But chain them, and every step is a place to fall off the cliff. Miss the film indirection and you research the wrong ship. Nail the research but order the fruits wrong, and you score zero. **GAIA is a chain of easy links, and a chain is only as strong as — well, you know the saying.**
+
+One more design decision shapes everything: every GAIA question has a single, short, factual answer. A number. A word. A short list. That's what makes automated exact-match evaluation possible — character-by-character comparison, no LLM judge, no partial credit, no vibes. It's brutally fair. And it means, and I'll repeat this later because it matters that much: **a correct but verbose answer scores zero.** If the gold answer is `Paris` and your agent says `The answer is Paris`, the exact matcher says no. Your agent isn't graded on being right. It's graded on emitting the right string.
+
+## The Plumbing: Template Space and Scoring API
+
+The course gives you two on-ramps. Use both.
+
+**The template Space.** The course provides a starter Space in the [agents-course org](https://huggingface.co/agents-course) — duplicate it into your account with one click. You get a Gradio app with all the boring-but-essential wiring: a login button tying submissions to your HF account, a basic agent skeleton, and a run-and-submit button that fetches the questions, runs your agent, and posts answers to the scoring service. The built-in agent is deliberately useless — a placeholder returning a fixed answer, scoring essentially nothing. That's your starting block. The entire assignment, mechanically, is: **replace the placeholder brain with a real one.**
+
+**The evaluation API**, so you can iterate from a notebook or your laptop:
+
+```python
+import requests
+
+API_URL = "https://agents-course-unit4-scoring.hf.space"
+
+# 1. Fetch all evaluation questions (task_id + question text)
+questions = requests.get(f"{API_URL}/questions").json()
+
+# 2. Or grab one random question while developing
+question = requests.get(f"{API_URL}/random-question").json()
+
+# 3. Download a file attached to a question (image, audio, xlsx, code...)
+file_bytes = requests.get(f"{API_URL}/files/{task_id}").content
+
+# 4. Submit: username + link to your Space code + answers per task_id
+submission = {
+    "username": "your-hf-username",
+    "agent_code": "https://huggingface.co/spaces/your-username/final-assignment/tree/main",
+    "answers": [
+        {"task_id": tid, "submitted_answer": ans}
+        for tid, ans in my_answers.items()
+    ],
+}
+result = requests.post(f"{API_URL}/submit", json=submission).json()
+print(result["score"])
+```
+
+The code link keeps the leaderboard honest — anyone can inspect how a score was achieved.
+
+Practical notes from the trenches. Cache the questions locally; don't hammer the API every iteration. During development, run one or three questions, not all twenty — your wallet will thank you. And remember the grader only sees the final answer string per task ID. All the beautiful reasoning is invisible — which is exactly why [tracing](/writing/agent-evaluation-observability) matters. With traces, a wrong answer is a bug report. Without them, it's a mystery.
+
+And one silent score-killer worth flagging early: **some questions come with attachments.** If your agent never calls the files endpoint, it's guaranteed to fail every question that depends on one.
+
+## Architecture: Tools Are Destiny
+
+Work backwards from what level-1 questions actually demand.
+
+**Web search and page reading — two separate tools.** Questions mention web facts, so you need search. But snippets are shallow; the answer is usually *inside* the page. So you also need a fetcher that pulls a URL, strips boilerplate, and returns clean text. Search proposes, fetch disposes.
+
+**File handling across modalities.** An image question needs vision — a multimodal model or an image-analysis tool. An audio question needs speech-to-text (a Whisper wrapper). A spreadsheet question needs tabular computation — and please, do not ask a language model to sum a column by reading numbers aloud in its head.
+
+**Code execution — the crown jewel.** A Python interpreter tool converts entire categories of failure into categories of success. Counting, sorting, date arithmetic, parsing a CSV, reversing a string — models are unreliable at doing these in their heads and excellent at writing five lines of Python that do them perfectly. If you take one architecture note from this post: give your agent a code sandbox, and teach it via the system prompt to prefer *computing* answers over guessing them.
+
+**Framework:** you've met all three. [Smolagents](/writing/smolagents-code-first-agents) for fast iteration — its CodeAgent, which writes Python as its action language, is almost suspiciously well-suited to GAIA. LlamaIndex if document intelligence is your bottleneck. LangGraph if you want explicit control flow. My honest advice: pick the one you're fastest in and let the tools carry the score. A simple ReAct loop — think, act, observe, repeat — with a strong toolbox will clear 30% on level 1. **A running mediocre agent you can measure beats an imaginary perfect one, every single time.**
+
+**Model:** strong function calling and instruction following, because tool-selection errors and format violations are your two death modes. Use a cheap fast model while debugging the plumbing, your strongest model for scoring runs. And cap the loop — ten or fifteen steps max per question, so one pathological question can't eat your API budget while you're at lunch.
+
+## The Final Answer Format: Where Points Go to Die
+
+Here's the uncomfortable truth about exact-match grading. Your agent can do flawless research and score zero, because it answered like a helpful chatbot instead of a benchmark submission. Chat models pad. They hedge. They say "based on my research, the answer appears to be 17, though sources vary." The matcher looks for `17`, finds a paragraph, and marks it wrong.
+
+You fight back in the system prompt, following GAIA's own evaluation convention — reason freely, then finish with a strict final-answer line:
+
+```python
+SYSTEM_PROMPT = """You are a general AI assistant. I will ask you a question.
+Reason step by step, using your tools, and finish your reply with:
+
+FINAL ANSWER: [YOUR FINAL ANSWER]
+
+YOUR FINAL ANSWER should be a number OR as few words as possible OR a
+comma separated list of numbers and/or strings.
+- If asked for a number: plain digits, no comma thousands separators,
+  no units (no $, %, km) unless the question explicitly asks for them.
+- If asked for a string: as few words as possible, no articles,
+  no abbreviations unless asked, and watch singular vs plural forms.
+- If asked for a comma separated list: apply the rules above to each
+  element, in exactly the order the question specifies.
+"""
+```
+
+Every rule corresponds to real lost points. Gold answer `42`, your agent says `42%` — you just failed a question you solved. The painting question demands plurals; `banana` instead of `bananas` can sink it. One million is `1000000`, not `1,000,000`.
+
+Then, belt and suspenders — a deterministic post-processor:
+
+```python
+def extract_final_answer(raw_output: str) -> str:
+    marker = "FINAL ANSWER:"
+    answer = raw_output.split(marker)[-1] if marker in raw_output else raw_output
+    return answer.strip().rstrip(".")
+```
+
+That five-line parser is worth actual percentage points. It might be the highest return-on-investment code in your whole submission.
+
+## The Six Pitfalls That Quietly Eat Scores
+
+**1. The rambler.** The agent answers in an essay. Countermeasure: the final-answer contract plus the mechanical parser, as above.
+
+**2. The context bomb.** The agent fetches an enormous page — a full Wikipedia article, a wall of navigation junk — and the raw dump blows through the context window, shoving the original question out of working memory. Countermeasure: never return raw pages from your fetch tool. Truncate, strip markup, or have the tool extract only passages relevant to the current query. Guard context like it's RAM on a 1980s computer, because functionally it is.
+
+**3. The infinite loop.** Search, dissatisfaction, rephrase, search again — burning steps and money while going nowhere. Countermeasure: the hard step cap, plus a prompt nudge: "if you cannot determine the answer after reasonable effort, give your best single guess in the required format." On exact match, a formatted guess has a nonzero chance. A timeout has exactly zero.
+
+**4. The file ignorer.** The question says "in the attached spreadsheet" and the agent, which never called the files endpoint, cheerfully hallucinates an answer. Countermeasure: make attachment handling part of the *harness*, not the agent's discretion. When you fetch a question, check for an attachment, download it by task ID, and inject a note into the prompt. Structural fixes beat prompt hopes.
+
+**5. The budget fire.** Twenty questions, times fifteen steps, times iterate-iterate-iterate, times a premium model — plus rate limits. Countermeasure: cache aggressively (search results, fetched pages, even full runs keyed by question), retry-with-backoff around every external call, debug on the cheap tier.
+
+**6. Overfitting.** You have twenty public questions, and the temptation is to tweak until all twenty pass — hard-coding special cases, tuning prompts to specific phrasings. Resist it. Improve *categories*, not questions. If a question fails because spreadsheets aren't handled, fix spreadsheet handling — that's a capability. Hard-coding the answer is a confession. The certificate looks the same either way, but you're not really here for the PDF, are you?
+
+## One Question, End to End
+
+Your harness pulls a question: *"In the attached audio recording, a chef lists the ingredients for a recipe — how many of them are vegetables?"* It sees the attachment flag, calls the files endpoint, downloads an MP3, and builds the prompt: question text, a note about the local file path, and the final-answer contract.
+
+The agent reasons: I can't listen to audio directly, but I have a transcription tool. It calls `transcribe` on the path; the transcript comes back: onions, chicken, carrots, celery, flour, butter. It reasons about the actual question — onions, carrots, celery are vegetables; chicken, flour, butter are not. A careful agent writes two lines of Python with its code tool to filter and count rather than counting in its head. The tool returns 3.
+
+Formatting: the question asks "how many" — a number, plain digits, no units, no sentence. The agent emits its reasoning, then `FINAL ANSWER: 3`. The post-processor slices, trims, stores the pair. Twenty answers later, the harness posts to the submit endpoint, the scorer exact-matches each, and the leaderboard shows your name and percentage.
+
+Fetch, route, tool, compute, format, submit. No magic — just the whole course bolted together and pointed at a target.
+
+## The Path to Passing
+
+**Tonight:** duplicate the template Space, log in, press run, let the placeholder submit its fixed answers. You'll score near zero — that's the point. You now have a working pipeline and a baseline.
+
+**Tomorrow:** the simplest real agent you can stand — one model, web search, page fetch, the final-answer contract. Run the twenty questions once, submit, write down your score. You'll likely land in the teens or twenties already.
+
+**Then, the discipline part:** improve one tool at a time. Read your traces, find the biggest failure category, fix that category, rerun, resubmit. Add code execution — measure. Add file handling — measure. Tighten formatting — measure. One variable at a time, like a scientist. Three or four cycles, and 30% is behind you. And honestly, once you're at thirty, I dare you to stop — forty is right there, and the leaderboard remembers.
+
+## Key Takeaways
+
+1. **GAIA is hard because of chains, not links.** Every step is easy; the product of many easy steps is brutal. Humans ~92%, launch-era GPT-4 with plugins ~15%, your target 30% on twenty level-1 questions.
+2. **The mechanics are solved before you start.** Duplicate the template Space; login, questions, files, and submit endpoints are pre-wired. Your job is the brain in the middle.
+3. **Tools are destiny.** Search + page reading + file handling + code execution covers the overwhelming majority of level 1, and code execution is the single highest-value tool in the box.
+4. **The answer string is a first-class engineering artifact.** Correct in the wrong costume scores zero. Enforce a strict format in the system prompt; parse it out with deterministic code.
+5. **Iterate like an engineer, not a gambler.** Baseline first, traces always, one improvement per cycle. Fix the capability, not the question — the agent you'll be proud of is the one that would also pass the twenty-first question, the one nobody showed you.
+
+## What's Next?
+
+The season finale: [the future of agents](/writing/future-of-agents-fine-tuning-mcp) — fine-tuning models for function calling with LoRA, multi-agent systems, MCP, and what actually compounds in an agent-engineering career.
+
+## Further Reading
+
+- **The Agents Course (Unit 4):** [huggingface.co/learn/agents-course](https://huggingface.co/learn/agents-course)
+- **GAIA paper:** [arxiv.org/abs/2311.12983](https://arxiv.org/abs/2311.12983)
+- **GAIA leaderboard:** [huggingface.co/spaces/gaia-benchmark/leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard)
+- **Course org (template Space + student leaderboard):** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+- **Smolagents docs:** [huggingface.co/docs/smolagents](https://huggingface.co/docs/smolagents/)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 11 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/6o0OBk9gd1ePRN9YAZmmvl)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/episode/6o0OBk9gd1ePRN9YAZmmvl?utm_source=generator"
+  width="100%"
+  height="232"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+---
+
+**Cleared the 30% bar?** Tell me your score and what finally moved it. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com.
