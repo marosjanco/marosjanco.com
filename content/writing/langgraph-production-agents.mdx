@@ -1,0 +1,321 @@
+---
+title: "LangGraph in Production: Agents That Survive"
+date: "2026-07-03"
+summary: "The ReAct loop as a two-node graph. Checkpointing that survives crashes. Human-in-the-loop interrupts, retries, fallbacks, and full observability with Langfuse."
+tags: ["langgraph", "agents", "production", "observability", "langfuse"]
+draft: false
+---
+
+# LangGraph in Production: Agents That Survive
+
+Your agent is deep into a job. It has extracted text from three images, done the arithmetic, and it's halfway through the summary — and then the process dies. Power blip. Out of memory. Someone tripped over the cable. Doesn't matter.
+
+Here's the question that separates a demo from a production system: **what happens next?**
+
+With most agent code you've written, the honest answer is: everything is gone. All that reasoning, all those tool calls, all those tokens you paid for — vaporized. You start over from message one.
+
+With the architecture in this post, the answer is different. The agent wakes back up, looks at its last checkpoint, sees exactly which step it finished, and picks up mid-thought. No lost work, no re-billed tokens.
+
+That difference — **resumable, observable, interruptible agents** — is the whole game in production.
+
+This post builds on [LangGraph: Thinking in Graphs](/writing/langgraph-thinking-in-graphs). Sixty-second recap: LangGraph manages the *control flow* of LLM applications. State is a typed dictionary — the single source of truth. Nodes are plain Python functions that return partial updates. Edges are the wiring, normal or conditional. The philosophy: predictability over flexibility, explicit over implicit. And production is exactly where implicit behavior goes to cause incidents.
+
+## The Document Analyst: ReAct as a Graph
+
+The brief, from the HuggingFace course: documents arrive as images — photos of handwritten training schedules, meal plans, notes. The agent must extract text with a vision model, perform calculations when asked, summarize, and decide for itself how many tool calls the job takes. Multi-modal, multi-step, not a toy.
+
+### State, with one crucial mechanic
+
+```python
+from typing import Annotated, TypedDict
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+
+class AgentState(TypedDict):
+    input_file: str                                      # path to the document/image
+    messages: Annotated[list[AnyMessage], add_messages]  # accumulating history
+```
+
+That `add_messages` annotation hides the single most important mechanic in agent-style LangGraph: **messages don't get replaced — they accumulate.** When a node returns new messages, the framework *appends* them instead of overwriting. So a node returns just the one message it produced, and the history grows.
+
+Why does this matter so much? Because the message list *is* the agent's working memory. The user's request, the model's reasoning, every tool call, every tool result — all land in that list, in order, and the model sees the whole history every time it's invoked. Lose that accumulation behavior and your agent gets amnesia between steps.
+
+### Two tools, deliberately different
+
+```python
+import base64
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+vision_llm = ChatOpenAI(model="gpt-4o")
+
+@tool
+def extract_text(img_path: str) -> str:
+    """Extract all text content from an image file."""
+    with open(img_path, "rb") as f:
+        image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    message = {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Extract all the text from this image."},
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+        ],
+    }
+    response = vision_llm.invoke([message])
+    return response.content
+
+@tool
+def divide(a: float, b: float) -> float | None:
+    """Divide a by b. Returns None if b is zero."""
+    if b == 0:
+        return None
+    return a / b
+```
+
+The first tool gives the agent eyes: open the image, base64-encode the bytes so they can travel inside an API call, send them to a vision-capable model, get back plain text. A handwritten schedule on a napkin becomes a string the rest of the pipeline can chew on.
+
+The second looks trivial — the model can do division, right? Well... can it, *reliably*? Language models are famously wobbly at arithmetic, and when you're computing someone's average training minutes per day, wobbly is not acceptable. The deeper lesson: **anything that must be exactly right should be a tool, not a token prediction.** Calculators, database lookups, API calls — deterministic things stay deterministic.
+
+And notice the docstrings. They're not decoration — they're the description the model reads when deciding whether to call the tool. Clear tool definitions are the first success criterion of the whole system. (Much more on this in [the agentic RAG post](/writing/agentic-rag-retrieval-that-thinks).)
+
+### Two nodes, one loop
+
+Here's the punchline: this graph has only two working nodes, and yet it implements the full ReAct pattern — reason, act, observe, repeat.
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+
+tools = [extract_text, divide]
+llm = ChatOpenAI(model="gpt-4o")
+llm_with_tools = llm.bind_tools(tools)  # teach the model tool names + schemas
+
+def assistant(state: AgentState) -> dict:
+    """Think: hand the history to the LLM, let it decide what's next."""
+    response = llm_with_tools.invoke(state["messages"])
+    return {"messages": [response]}  # add_messages appends it
+
+def should_continue(state: AgentState) -> str:
+    """One question: does the last message contain tool calls?"""
+    last = state["messages"][-1]
+    if getattr(last, "tool_calls", None):
+        return "tools"
+    return END
+
+builder = StateGraph(AgentState)
+builder.add_node("assistant", assistant)
+builder.add_node("tools", ToolNode(tools))  # pure execution, zero thinking
+
+builder.add_edge(START, "assistant")
+builder.add_conditional_edges("assistant", should_continue, {"tools": "tools", END: END})
+builder.add_edge("tools", "assistant")  # the edge that makes it an agent
+
+graph = builder.compile()
+```
+
+The assistant node thinks; the model responds either in plain language ("done, here's your summary") or with structured tool calls. The tools node executes each call, wraps each result in a tool message tagged with the ID of the call that requested it — that tagging is how the model knows which result answers which request — and appends it to history. Then the unconditional edge loops back to the assistant for another round of reasoning.
+
+Trace the shape: assistant thinks. Tool calls? Yes — tools execute, results flow back, assistant thinks again. Around we go, until the model looks at everything it's gathered, answers in plain text, and the condition routes to END. **The model decides how many laps to run. The graph decides what a lap looks like.** That division of labor — model chooses actions, graph enforces structure — is the ReAct pattern expressed as a graph, and it's the single most reusable diagram in agent engineering. You will build this shape a hundred times in your career.
+
+Run it:
+
+```python
+from langchain_core.messages import HumanMessage
+
+result = graph.invoke({
+    "input_file": "batman_training_schedule.png",
+    "messages": [HumanMessage(content=(
+        "Analyze the attached training schedule image. Extract the text, "
+        "identify the exercises and durations, calculate total training time, "
+        "and provide a summary."
+    ))],
+})
+```
+
+Lap one: the assistant can't see the image directly, so it emits an `extract_text` call. Lap two: with the extracted text in history, it emits arithmetic calls — divide total minutes by number of sessions, say. Lap three: it has the text and the numbers, writes the summary, no tool calls, END.
+
+Feed the same graph a shopping-list image with zero code changes and it handles that too. The graph is task-agnostic: the tools define what the agent *can* do, the request defines what it *should* do, the loop handles everything in between.
+
+## The Production Layer
+
+Now, everything that goes wrong the moment you deploy. Five parts.
+
+### 1. Checkpointing: crashes become hiccups
+
+When you compile a graph, you can hand it a **checkpointer** — a small object with a big promise: after *every single step*, it snapshots the entire state and writes it to storage. Not just the final answer — the whole trajectory.
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
+graph = builder.compile(checkpointer=checkpointer)
+
+config = {"configurable": {"thread_id": "wayne-session-42"}}
+result = graph.invoke({"messages": [HumanMessage(content="...")]}, config)
+```
+
+Every conversation runs under a **thread ID**, and all checkpoints get filed under it. Two superpowers fall out:
+
+**Conversations resume.** The user asks for an analysis on Monday. On Wednesday they come back: "actually, double the cardio and tell me the new total." Invoke with the same thread ID and the checkpointer restores the full history — extracted text, calculations, everything. You didn't build a session store. The thread *is* the memory.
+
+**Crashes don't lose work.** The process dies between step four and five. On restart, invoke the same thread; the checkpointer loads the last completed snapshot and execution continues from there. For agents that run minutes or hours, this transforms failure from catastrophe into hiccup.
+
+For development, the SQLite saver is one line. For production, point the checkpointer at Postgres — durable, shared across workers, survives redeploys. The graph code doesn't change at all.
+
+One honest caveat: checkpointing doesn't solve the *other* memory failure mode — **the message list grows**. Every lap sends the whole history to the model; context fills, latency creeps, and your token bill quietly becomes the most expensive line item. The fix is summarization: past a threshold, compress everything except the recent messages into a paragraph.
+
+```python
+def summarize_old_messages(state: AgentState) -> dict:
+    if len(state["messages"]) <= 20:
+        return {}
+    old, recent = state["messages"][:-10], state["messages"][-10:]
+    summary = llm.invoke(
+        [HumanMessage(content=f"Compress this conversation into one paragraph:\n{old}")]
+    )
+    return {"messages": [
+        HumanMessage(content=f"Previous context: {summary.content}"), *recent
+    ]}
+```
+
+Full recent memory, compressed distant memory, bounded cost. It's how human memory works too.
+
+### 2. Human-in-the-loop: oversight is a place, not a hope
+
+The primitive is the **interrupt**. Mark a point in the graph — typically before a sensitive node — where execution pauses. Not crashes, not times out. Pauses.
+
+```python
+graph = builder.compile(
+    checkpointer=checkpointer,
+    interrupt_before=["send_email"],  # stop and wait before this node
+)
+```
+
+Because of the checkpointer, the paused state is durably saved mid-flight. A human looks at the pending action — here's exactly what the agent is about to do, and the full state that led it there — and can approve, edit the state first, or reject.
+
+Notice this is only possible *because* of persistence: an interrupt is really just a checkpoint that waits for permission. And notice what it buys you philosophically: the graph structure makes the pause point explicit. You can look at the diagram and say — right there, between analysis and action, a human signs off. Try pointing at that spot in a giant prompt. In a graph, oversight is a place, not a hope.
+
+The butler version: he can read the schedule, do the math, and draft the week's grocery orders on his own. But before placing an order on the boss's credit card? He pauses and asks. Butler instincts, encoded as an edge.
+
+### 3. Errors: retry, fallback, escalate
+
+Your agent *will* fail in production. The vision API times out. The image path is wrong. A user asks it to divide by zero — note that the course's own `divide` tool guards for exactly that, which tells you its authors have met real users. The question is never whether failures happen; it's whether your architecture metabolizes them or amplifies them. Three moves, in order:
+
+**Retry the transient.** Rate limits, network blips. LangGraph lets you attach retry behavior at the node level:
+
+```python
+from langgraph.pregel import RetryPolicy
+
+builder.add_node("tools", ToolNode(tools),
+                 retry_policy=RetryPolicy(max_attempts=3))
+```
+
+The retry boundary is a node boundary — the blast radius of a failure is one box in your diagram. And because the checkpointer saved everything before the node started, a retry replays one step, not the whole pipeline.
+
+**Fall back on the survivable.** A fallback isn't a try-except buried in a function — it's an explicit branch in the graph:
+
+```python
+def safe_llm_call(state: AgentState) -> dict:
+    try:
+        response = llm_with_tools.invoke(state["messages"])
+        return {"messages": [response]}
+    except Exception as e:
+        return {"error": str(e), "fallback_needed": True}
+```
+
+Once the error is *in state*, it's data. And once it's data, your edges can route on it — vision model down, route to a simpler extraction path; context exceeded, route through the summarization node and try again. Errors stop being exceptions flying up a stack and become facts the graph reasons about.
+
+**Escalate the consequential.** Low confidence, high stakes, anything touching money or safety: a dedicated escalation node packages up the full state, history, and failure reason, hands it to a human, and stops. Because the state contains everything, the human receives the entire investigation so far — a briefing, not a cold start. The agent's job was never to handle every case. It was to handle the easy majority and make the hard minority easier for a person.
+
+### 4. Streaming: visible progress is progress
+
+An agent run takes many seconds, and many seconds of frozen spinner is where user trust goes to die.
+
+```python
+for chunk in graph.stream(initial_state, config, stream_mode="updates"):
+    for node, updates in chunk.items():
+        print(f"[{node}] {updates.get('messages', [''])[-1]}")
+```
+
+The user watches the agent work: reading your document... extracted the text... calculating... writing the summary. Same latency, wildly better experience. Free bonus: streaming is also the best debugging tool you have — watching the loop lap by lap is how you catch the agent doing something dumb on lap two instead of discovering it in the final answer.
+
+### 5. Observability: agents fail politely
+
+The bluntest sentence in the course's bonus unit: **observability is not optional for production agents.** Here's why the stakes are special. A normal service fails loudly — exception, stack trace, red dashboard. An agent can fail *silently and politely*. It confidently returns a wrong answer. It quietly takes eleven tool-call laps where two would do, and you pay for every one. None of that shows up in an error log, because nothing technically errored.
+
+The answer is tracing, built on OpenTelemetry with a backend like Langfuse. Instrumentation is anticlimactic in the best way:
+
+```python
+from langfuse.callback import CallbackHandler
+
+langfuse_handler = CallbackHandler(
+    public_key="pk-...", secret_key="sk-...",
+    host="https://cloud.langfuse.com",
+)
+
+result = graph.invoke(initial_state, config={
+    "configurable": {"thread_id": "wayne-session-42"},
+    "callbacks": [langfuse_handler],
+})
+```
+
+Every run becomes a trace — the biography of one request. Inside it, spans: each LLM call with its full prompt, response, token counts, latency, cost; each tool execution with inputs, outputs, duration, errors. For a LangGraph agent, the trace mirrors the graph — you watch state flow node by node, lap by lap, after the fact.
+
+The payoff is immediate. A user says the agent gave a weird answer yesterday. Old world: shrug, try to reproduce, give up. New world: open the trace. Ah — the vision tool returned garbled text on lap one because the photo was rotated, and every downstream step faithfully built on the garbage. Root cause in ninety seconds.
+
+What to watch across traces: **token usage** (your marginal cost — an agent that silently doubles its laps silently doubles your bill), **latency percentiles** (p95 and p99, not averages — the bad days are where the loop ran long), **cost** by agent, user, and time, **error rates** per tool, and **success rate**. Then evaluation: online, via user feedback and LLM-as-judge scoring on rubrics like correctness and helpfulness; offline, by running the agent against a benchmark set with known answers on every meaningful change. Change the prompt, swap the model, add a tool — rerun the set, compare. Congratulations, you've invented regression testing for agent behavior.
+
+## Determinism Wins at Scale
+
+Does anyone run this at serious scale? LangGraph's own docs cite Klarna, Uber, and J.P. Morgan. But the interesting part isn't the logos — it's that teams building production agents keep converging on the same shape: deterministic routing (the business knows its workflows, so the model doesn't freelance on process), escalation rules encoded as conditional edges a compliance reviewer can read, checkpointing for anything long-running, human sign-off as interrupts before consequential actions, and traces on everything.
+
+They could let the model make every decision. They deliberately don't. They fence in the model's freedom exactly where freedom is a liability — process, policy, money, safety — and grant it freedom where it's an asset — language, reasoning, judgment within a step. The model is brilliant inside the boxes. The graph decides how the boxes connect.
+
+## Try This Yourself
+
+The single most convincing demo in this course, and the audience is you:
+
+1. **Build the document analyst** above. Feed it a photo of any handwritten note — gym schedule, groceries — and ask for extraction, a calculation, and a summary.
+2. **Stream it** in updates mode and watch the laps tick by: assistant, tools, assistant, tools, end.
+3. **The main event:** compile with a SQLite checkpointer and a thread ID. Then, while the agent is mid-run, kill the process. Really — Ctrl-C it between tool calls, no mercy. Restart, invoke the same thread ID, and watch it resume from its last checkpoint and finish the job. The first time you watch an agent survive its own murder, "production" stops being a chapter title and becomes something you can feel.
+4. **Stretch goal:** add Langfuse tracing, run the graph a few times, and read your own traces. Find your slowest span and your most expensive call. Everyone spots something they didn't expect.
+
+## Key Takeaways
+
+1. **The agent loop is a graph, and it's tiny.** Assistant node, tools node, one condition, one loop-back edge. That two-node shape is ReAct, and it's the most reusable structure in agent engineering.
+2. **Messages accumulate, and that's the memory.** `add_messages` appends instead of overwriting. Protect the history — and when it grows long, summarize the old, keep the recent.
+3. **Checkpointing turns crashes into hiccups.** Snapshots at every step under a thread ID; conversations resume days later; and an interrupt is just a checkpoint that politely waits for permission.
+4. **Handle failure in three moves, in order.** Retry the transient (scoped to a node). Fall back on the survivable (errors in state are data you can route on). Escalate the consequential to a human — with the full state as a briefing.
+5. **Observability is not optional.** Trace everything with OpenTelemetry and Langfuse; watch tokens, latency percentiles, cost, and error rates; evaluate online and offline. Agents fail politely, so you have to look.
+
+## What's Next?
+
+In [LlamaIndex: Giving Agents Your Documents](/writing/llamaindex-document-agents), the center of gravity shifts from control flow to data: parsing messy real-world files, chunking, embedding, retrieval, and wiring it all into agents that reason over your documents.
+
+## Recommended Further Reading
+
+- **HuggingFace Agents Course:** [Unit 2.3 + Observability bonus unit](https://huggingface.co/learn/agents-course)
+- **LangGraph docs:** [langchain-ai.github.io/langgraph](https://langchain-ai.github.io/langgraph/) — persistence, interrupts, streaming
+- **Langfuse docs:** [langfuse.com/docs](https://langfuse.com/docs)
+- **Course organization:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 6 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/show/033IY4yRcIIausR9EybtAm?utm_source=generator"
+  width="100%"
+  height="352"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+---
+
+**Shipped an agent that survived a crash?** Share the story. Tweet [@maros_janco](https://twitter.com/maros_janco) or email maros@marosjanco.com. I want to see what you're building.

@@ -1,0 +1,300 @@
+---
+title: "LangGraph: Thinking in Graphs"
+date: "2026-07-03"
+summary: "Why explicit control flow beats free-roaming agents. State, nodes, and edges explained. Building the email-sorting butler graph with conditional routing, step by step."
+tags: ["langgraph", "agents", "python", "workflows", "tutorial"]
+draft: false
+---
+
+# LangGraph: Thinking in Graphs
+
+Picture a butler sorting the morning mail. A letter from a potential client. A charity gala invitation. A glossy flyer screaming "congratulations, you've won a yacht, just enter your bank details."
+
+The butler doesn't agonize. He doesn't improvise. He runs the same quiet procedure he's run for thirty years: read the letter, decide if it's legitimate or junk. Junk goes in the bin — no reply, no drama. Legitimate mail gets a courteous draft response, and the boss gets notified. Every letter, same flow, same decision point, same two branches.
+
+His reliability doesn't come from being clever. It comes from the fact that **the process is fixed, and only the judgment inside each step is smart.**
+
+That, in one butler, is the entire idea behind LangGraph. Sometimes the most powerful thing you can do with a large language model is refuse to let it drive.
+
+## Control vs Freedom
+
+In [the previous post on Smolagents](/writing/smolagents-code-first-agents), the model was the driver. You hand it tools and a task, and the LLM decides what to do next — writes code, calls a tool, looks at the result, decides again. That loop is powerful precisely because it's open-ended. The agent can surprise you in good ways.
+
+But open-ended cuts both ways. The agent can call tools in a weird order. It can skip a step you consider mandatory. It can solve the same problem completely differently on Tuesday than it did on Monday. For a weekend project, that's charming. For a system that processes invoices, triages support tickets, or touches anything with legal or financial consequences — that's a liability.
+
+So here's the question to hold onto:
+
+**Does your application need the LLM to decide the workflow? Or do you already know the workflow, and you just need the LLM to be smart inside individual steps?**
+
+If it's the second — you know the steps, the order, the decision points — you don't want a free agent. You want a graph.
+
+LangGraph, built by the LangChain team, manages the **control flow** of applications that integrate an LLM. Note the phrasing. Not *be* the LLM. Not *prompt* the LLM. Manage control flow. It's an orchestration layer.
+
+(Quick disambiguation, because the names confuse everyone: LangChain is the big toolbox — model interfaces, retrievers, tool wrappers. LangGraph is a separate package that does one thing: orchestrate workflows. You'll often use them together, but you don't have to. A LangGraph node can be plain Python with no LangChain in sight.)
+
+### When to reach for a graph
+
+LangGraph shines when you need **predictability over flexibility**:
+
+- **Multi-step processes with explicit flow.** If you can draw your app as a flowchart, it's a graph waiting to happen.
+- **State that persists across steps.** When step five needs what step two discovered, that memory should be structured, not buried in a prompt.
+- **Deterministic logic mixed with AI.** Maybe 80% of your pipeline is plain code and only two steps need a model. A graph keeps the boring parts boring and the smart parts contained.
+- **Human intervention points.** Places where the machine stops and waits for a person. Graphs make these first-class citizens.
+- **Multi-component architectures** where specialized pieces hand work to each other in a defined way.
+
+Could you write this with if-else statements? Honestly — yes. A conditional edge is an if statement wearing a nicer suit. But the framework buys you things your homemade pile of if-else doesn't: typed state management, automatic visualization, step-by-step tracing, built-in human-in-the-loop pauses, streaming, and graceful error handling. Each of those is a week of engineering on your own. Together, they're the difference between a script and a system.
+
+And this isn't a toy. LangGraph positions itself as a low-level orchestration runtime for long-running, stateful agents, and powers production systems at Klarna, Uber, and J.P. Morgan. Its philosophy is very Pythonic: **explicit is better than implicit.** It hands you the wiring diagram and says: you're the electrician.
+
+## The Three Building Blocks
+
+LangGraph's entire vocabulary fits in one sentence: **an application is a directed graph where state flows through nodes, and edges decide where it goes next.**
+
+### State: the single source of truth
+
+State is all the information that flows through your application — a shared clipboard every step reads from and writes to. You define it as a plain `TypedDict`:
+
+```python
+from typing import TypedDict, Optional
+
+class EmailState(TypedDict):
+    email_content: str
+    sender: str
+    messages: list           # running conversation with the LLM
+    classification: Optional[str]
+    spam_score: float
+    is_spam: bool
+    draft_response: str
+    notification_sent: bool
+```
+
+No base classes, no framework ceremony. Just a schema, written by you, describing exactly what your app needs to remember. Designing this schema is the real design work. The advice: be comprehensive — track inputs, intermediate results, decisions, outputs. If a later step might need it, add the field.
+
+Two rules about state trip everyone up:
+
+1. **Nodes return partial updates, not the whole state.** A node returns a small dictionary with only the fields it changed. The framework merges it in: `new_state = old_state | your_updates`.
+2. **State is treated as immutable between steps.** You describe changes by returning them, never by mutating in place. This sounds like pedantry, but it's what makes the system transparent — every change flows through a returned update, so LangGraph can log every transition, show you the exact state after every step, and (as we'll see in [the production post](/writing/langgraph-production-agents)) checkpoint at every step.
+
+### Nodes: just Python functions
+
+A node is a function. Not a class, not a decorator jungle. It takes the current state, does some work, returns a dictionary of updates:
+
+```python
+def classify_email(state: EmailState) -> dict:
+    """One LLM call, one field updated."""
+    response = llm.invoke(state["messages"] + [
+        {"role": "user", "content": "Classify this email: urgent, normal, or low priority."}
+    ])
+    return {"classification": response.content}
+```
+
+The work can be anything: an LLM call, a tool call, pure logic, even a wait-for-human point. From the graph's perspective they're all the same — state in, updates out.
+
+And think about what this buys you for testing. A node is a plain function of a dictionary, so you unit test it with a plain dictionary. Build a fake state with a spammy email, call the function, assert `is_spam` comes back true. No graph, no mocking gymnastics. Every step of your agent is independently testable — which you basically cannot say about a prompt-driven agent's inner monologue.
+
+### Edges: the tracks between stations
+
+Exactly two kinds:
+
+1. **Normal edges:** after node A, always go to node B. Wired with `add_edge`.
+2. **Conditional edges:** the diamond shapes in your flowchart. A routing function receives the state and returns **a string — the name of the next node**. Not a boolean, not the node itself. A string, which is a key into a mapping you provide.
+
+```python
+def route_email(state: EmailState) -> str:
+    """Routers look and point. They do no work."""
+    if state["is_spam"]:
+        return "notify"          # junk gets no reply
+    return "draft_response"      # legitimate mail gets a draft
+```
+
+Keep your routers dumb and your nodes busy. That separation keeps the graph readable.
+
+Two special citizens complete the picture: `START` (the entry marker — you draw an edge from START to whichever node runs first) and `END` (any path reaching it is done). Routers can even send flows straight to END — exactly what a spam filter might do.
+
+## Building the Email-Sorting Butler
+
+Let's build the full graph from the HuggingFace course: an email processing system. Read, classify, detect spam, draft responses to legitimate mail, notify the boss. No tools, no retrieval — just LLM decision-making inside a fixed flow. The perfect first graph.
+
+### The five nodes
+
+Each node has exactly one job — which is itself a design lesson.
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o")
+
+def read_email(state: EmailState) -> dict:
+    """Set the table: build the initial conversation."""
+    return {"messages": [
+        {"role": "system", "content": "You are Alfred, a helpful email assistant."},
+        {"role": "user", "content": f"Email from {state['sender']}:\n{state['email_content']}"},
+    ]}
+
+def classify(state: EmailState) -> dict:
+    response = llm.invoke(state["messages"] + [
+        {"role": "user", "content": "Classify this email as urgent, normal, or low priority."}
+    ])
+    return {"classification": response.content}
+
+def detect_spam(state: EmailState) -> dict:
+    response = llm.invoke(state["messages"] + [
+        {"role": "user", "content": "Is this spam? Rate it from 0 to 1. Answer with just the number."}
+    ])
+    # LLMs don't always answer a number question with a number.
+    try:
+        score = float(response.content.strip())
+    except ValueError:
+        score = 0.0  # fail-open here; in production you might fail the other way
+    return {
+        "spam_score": score,
+        "is_spam": score > 0.5,
+        "messages": state["messages"] + [{"role": "assistant", "content": response.content}],
+    }
+
+def draft_response(state: EmailState) -> dict:
+    response = llm.invoke(state["messages"] + [
+        {"role": "user", "content": "Draft a professional response to this email."}
+    ])
+    return {
+        "draft_response": response.content,
+        "messages": state["messages"] + [{"role": "assistant", "content": response.content}],
+    }
+
+def notify(state: EmailState) -> dict:
+    # In a real deployment: email, Slack, or a bat-shaped signal lamp.
+    print(f"Email from {state['sender']} processed: {state['classification']}")
+    return {"notification_sent": True}
+```
+
+Notice the `detect_spam` node: any node that turns free-form model text into structured state needs a plan for when the text doesn't cooperate. The `try/except` is not decoration — it's the meta-lesson.
+
+Also notice the design choice of keeping both `spam_score` and `is_spam` in state. The score is evidence; the flag is the decision. Keeping both means you can audit the decision later.
+
+### Wiring the graph
+
+The assembly ritual is always the same, and you'll do it a hundred times:
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+builder = StateGraph(EmailState)
+
+builder.add_node("read_email", read_email)
+builder.add_node("classify", classify)
+builder.add_node("detect_spam", detect_spam)
+builder.add_node("draft_response", draft_response)
+builder.add_node("notify", notify)
+
+builder.add_edge(START, "read_email")
+builder.add_edge("read_email", "classify")
+builder.add_edge("classify", "detect_spam")
+builder.add_conditional_edges(
+    "detect_spam",
+    route_email,
+    {"draft_response": "draft_response", "notify": "notify"},
+)
+builder.add_edge("draft_response", "notify")  # answered mail still gets reported
+builder.add_edge("notify", END)
+
+graph = builder.compile()  # catches structural nonsense here, not at runtime
+```
+
+The shape in your head: a straight corridor of three rooms — read, classify, detect spam — then a fork with two branches, both reconverging at the notify room before the exit. One diamond, two paths, one merge.
+
+### Two letters, two journeys
+
+Run the yacht scam through it:
+
+```python
+result = graph.invoke({
+    "email_content": "CONGRATULATIONS! You've WON a YACHT! Click here NOW!",
+    "sender": "prizes@totally-legit.biz",
+    "messages": [],
+    "classification": None,
+    "spam_score": 0.0,
+    "is_spam": False,       # placeholder, not a verdict
+    "draft_response": "",
+    "notification_sent": False,
+})
+```
+
+Execution: read → classify (low priority, raised eyebrow) → detect spam (score 0.95, flag flips true) → router reads `is_spam`, returns `"notify"`. **The draft node never runs.** No reply is drafted — exactly right; you don't correspond with yacht scammers. Final state: `is_spam` true, `draft_response` still empty, `notification_sent` true.
+
+Now the real letter — "Hello, I'm interested in your consulting services." Same graph, same code. Classify says normal priority. Spam score 0.1, flag stays false. The router returns `"draft_response"`, the model writes a courteous reply with the full conversation in view, then the normal edge carries us to notify and END.
+
+Same graph, two different journeys — and the difference was decided at exactly one, fully visible, fully loggable junction. That's the LangGraph promise in miniature. If the butler misfiles a letter, you know precisely where to look: the spam node scored it wrong, the threshold is wrong, or the router read the wrong field. Compare that to debugging a free agent, where the answer to "what went wrong" is *somewhere in the transcript, good luck*.
+
+## Seeing Your Graph
+
+Two features round this out, and both are about seeing.
+
+**Visualization.** Because you declared the structure up front, LangGraph can draw it:
+
+```python
+from IPython.display import Image
+
+Image(graph.get_graph().draw_mermaid_png())
+```
+
+One line and you get the picture: START at the top, the corridor, the branch, the merge, END. Put that diagram in your pull request — a reviewer can validate your entire control flow at a glance without reading a line of node code. Try doing that with a prompt.
+
+**Step-by-step inspection.** Instead of `invoke`, which runs to completion, call `stream` and watch each node execute:
+
+```python
+for event in graph.stream(initial_state):
+    for node_name, updates in event.items():
+        print(f"{node_name} -> {updates}")
+```
+
+Watching the butler process a letter live — read produced messages, classify produced a classification, detect spam produced a score — is the fastest way to make the state-merging model tangible. It's also your first debugging tool: when the graph misbehaves, stream it and watch exactly where the state goes sideways.
+
+And one sentence on what I'm deliberately not covering here: because state is explicit at every step, LangGraph can also *save* it at every step — checkpointing — which means an agent can survive a crash, pause for a human, and resume days later. That's what [the next post](/writing/langgraph-production-agents) is about.
+
+## Try This Yourself
+
+Maybe forty-five minutes in a notebook. Build the butler exactly as above, then **break it on purpose**:
+
+1. **Stream both test emails** and print node names and updates at each step. Confirm with your own eyes that `draft_response` simply never fires for spam.
+2. **Sabotage the router.** Swap the two return values in `route_email` so spam gets a polite reply and real mail gets binned. Run it and watch the butler courteously answer the yacht scam. It sounds silly, but you'll internalize something important: the intelligence and the control flow are separate. The model's spam judgment was still correct — your wiring betrayed it. In graph systems, bugs live in the edges as often as in the prompts.
+3. **Extend the state.** Add an urgency flag and a second conditional edge — urgent legitimate emails go to a new priority-response node with a different prompt. New field, new node, new router return value, new mapping entry: every concept from this post in about fifteen lines.
+
+Render the Mermaid diagram before and after. Watching your flowchart grow a new branch you can *see* is the moment this framework earns its keep.
+
+## Key Takeaways
+
+1. **LangGraph is about control.** Use a prompt-driven agent when the model genuinely needs to invent the workflow; use LangGraph when you can draw the flowchart yourself and need it followed, every single time.
+2. **State is the sun everything orbits.** A typed dictionary you design, the single source of truth. Be comprehensive: inputs, intermediate judgments, conversation history, outputs.
+3. **Nodes are just Python functions.** State in, partial updates out, framework merges. Every step is unit-testable in isolation.
+4. **Edges carry the flow logic.** Normal edges for always-next; conditional edges powered by routing functions that return the *name* of the next node as a string. Keep routers dumb, keep nodes busy.
+5. **Explicitness pays compound interest.** Declared structure means diagrams, streaming, isolated tests — and soon, checkpointing and resumption. The butler is reliable not because he's brilliant, but because his process is visible.
+
+## What's Next?
+
+In [LangGraph in Production](/writing/langgraph-production-agents), the butler gets a serious promotion: a vision-capable document analyst, the ReAct loop expressed as a graph, checkpointing that survives crashes, human-in-the-loop approvals, retries, and full observability with Langfuse.
+
+## Recommended Further Reading
+
+- **HuggingFace Agents Course:** [Unit 2.3 — LangGraph](https://huggingface.co/learn/agents-course)
+- **LangGraph docs:** [langchain-ai.github.io/langgraph](https://langchain-ai.github.io/langgraph/)
+- **Course organization:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 5 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/show/033IY4yRcIIausR9EybtAm?utm_source=generator"
+  width="100%"
+  height="352"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+---
+
+**Built a graph with LangGraph?** Share your project. Tweet [@maros_janco](https://twitter.com/maros_janco) or email maros@marosjanco.com. I want to see what you're building.
