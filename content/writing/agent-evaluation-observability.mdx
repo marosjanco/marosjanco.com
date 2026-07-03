@@ -1,0 +1,248 @@
+---
+title: "Agent Evaluation and Observability: The End of Vibes-Based Development"
+date: "2026-07-03"
+summary: "Why agents fail silently and how to see inside them. OpenTelemetry instrumentation, Langfuse traces, offline vs online evaluation, LLM-as-judge, and the GAIA benchmark."
+tags: ["agents", "observability", "evaluation", "langfuse", "opentelemetry", "gaia"]
+draft: false
+---
+
+# Agent Evaluation and Observability: The End of Vibes-Based Development
+
+Picture this. You've spent three weeks building a research agent. In the demo it's glorious. You ship it. And then... nothing happens. No crash. No error page. No alert at three in the morning.
+
+The agent just quietly starts being wrong.
+
+A search tool times out and the agent shrugs and answers from stale memory. A model update makes it slightly more verbose, and costs creep up forty percent over a month. A user phrases a question differently than your demo queries, and the agent takes eleven steps to do what should take three.
+
+And here's the brutal part: you don't know any of this is happening. Unlike normal software, an agent that fails doesn't throw an exception. It returns a confident, fluent, beautifully formatted wrong answer. Your logs say 200 OK. Your users say nothing. They just leave.
+
+That is the problem this post solves.
+
+## Why Agents Fail Differently
+
+Traditional software is deterministic. Same input, same output, forever. When it breaks, it breaks loudly and reproducibly — a stack trace, a 500 error, a specific line number where the world ended. Debugging is archaeology. The evidence is right there in the ruins.
+
+Agents are not like that. An agent is a language model in a loop, making decisions. Which tool should I call? What arguments? Is this observation good enough, or do I need another step? Am I done? Every one of those decisions is probabilistic. The same question asked twice can take two different paths.
+
+And crucially, when a decision is bad, the process doesn't halt. The loop keeps going. The model papers over the failure with plausible language — because generating plausible language is the one thing it's supremely good at. **A broken calculator gives you an error. A broken agent gives you an answer that looks exactly like a correct answer, just... isn't.**
+
+There's a second reason this matters. Cost and latency aren't fixed. When you call a normal API, the cost is roughly constant. When you run an agent, cost depends on how many steps it decides to take. An agent that gets confused doesn't just give worse answers — it gives *more expensive* worse answers, because confusion looks like extra loops, extra tool calls, extra tokens. **Your bill is a direct function of your agent's reasoning quality.**
+
+So you're not monitoring a machine. You're auditing a reasoning process. Four layers make that possible: instrumentation, tracing, monitoring, and evaluation.
+
+## Layer 1: Instrumentation
+
+Instrumentation means wiring your code so it reports what it's doing. It doesn't change what your agent does — it makes what your agent does *visible*. Like the sensors in a car: the engine runs fine without them, but without sensors there's no dashboard and no check-engine light.
+
+The industry standard is **OpenTelemetry** — open, vendor-neutral, language-agnostic. Your agent emits telemetry in one standard format, and you can point that stream at whatever backend you like (Langfuse, Datadog, Grafana) without touching agent code again. It's the USB of observability.
+
+For LLM apps specifically, there's a convention layer on top called **OpenInference**, and for smolagents there's a ready-made instrumentor. The whole setup is about five lines:
+
+```python
+import os
+import base64
+
+# Langfuse credentials
+LANGFUSE_PUBLIC_KEY = os.environ["LANGFUSE_PUBLIC_KEY"]
+LANGFUSE_SECRET_KEY = os.environ["LANGFUSE_SECRET_KEY"]
+LANGFUSE_AUTH = base64.b64encode(
+    f"{LANGFUSE_PUBLIC_KEY}:{LANGFUSE_SECRET_KEY}".encode()
+).decode()
+
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://cloud.langfuse.com/api/public/otel"
+os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
+
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+
+trace_provider = TracerProvider()
+trace_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+
+SmolagentsInstrumentor().instrument(tracer_provider=trace_provider)
+```
+
+That last line is the magic. It hooks into the framework itself, wrapping the internals so every model call, every tool invocation, every step of the reasoning loop gets captured automatically. You don't modify your agent. You don't add logging to your tools. You instrument once at startup, and from then on every `agent.run()` produces a full transcript.
+
+It's like hiring a court stenographer for your agent. The agent doesn't behave differently. But now there's a record.
+
+## Layer 2: Traces and Spans
+
+Langfuse's core object — the thing you'll stare at for hours once you get hooked — is the **trace**.
+
+A trace is the complete record of one agent run, end to end. One user question, one trace. Inside the trace are **spans** — one per operation.
+
+Think of a trace as the full receipt for a restaurant meal, and spans as the line items. The trace tells you the meal cost sixty euros and took two hours. Useful, but not actionable. The spans tell you the appetizer came out in five minutes, the main course took fifty, and dessert was comped because the kitchen dropped it. Now you know exactly where the evening went wrong.
+
+In agent terms:
+
+- **A span per LLM call** — full prompt in, full completion out, input and output token counts, and the computed cost of that specific call.
+- **A span per tool invocation** — which tool, what arguments the agent chose, what came back, how long it took.
+- **Nested spans** — a retrieval step contains child spans for the embedding call and the database query.
+
+At the top of each trace: total latency, total tokens split into input/output, total cost in actual currency (Langfuse knows model pricing and converts tokens to money), and any errors flagged in red where they happened.
+
+Here's why this changes your life. A user reports the agent gave a wrong answer about a refund policy. Without tracing: stare at code, try to reproduce, guess. With tracing: pull up that exact trace and read the story. Ah — the search tool was called with a query that was too generic, it returned an irrelevant document, and the model faithfully summarized the wrong source. That's not a model problem. That's a query formulation problem, and now you know precisely which prompt to fix.
+
+Nine times out of ten, the failing agent isn't mysteriously stupid — it's doing something perfectly logical with one broken input, and the trace shows you which one. **The trace turns arguments about vibes into diagnoses with evidence.**
+
+## Layer 3: What to Monitor
+
+Observability is a practice, not an installation. Five families of metrics matter:
+
+**1. Cost.** Token usage per call, per query type, per user, over time. Watch the trend, not the total — a prompt change that adds two hundred tokens gets multiplied by every step of every run of every user. The levers: route simple tasks to cheaper models, tighten prompts, cache common queries, batch requests, and re-evaluate model selection every few months as the cost-to-capability frontier moves.
+
+**2. Latency.** Don't look at averages — look at percentiles (p50, p95, p99). The median is your typical user's experience; the tail is your unluckiest users', and with agents the tail is where the pain lives, because a run that spirals into extra steps takes 10x the median. Improvements: parallel tool calls, better prompts, caching, and streaming — which doesn't reduce latency but reduces *perceived* latency, and buys enormous goodwill for free.
+
+**3. Errors.** Failed tool calls, timeouts, malformed outputs. But remember: many agent errors don't surface as errors. Track a *recovery rate* alongside the error rate — of the failures that happened, how many did the agent handle gracefully? An agent that notices a broken tool and says so is worth vastly more than one that hallucinates through it.
+
+**4. User feedback.** Explicit: thumbs up/down, ratings, comments — and attach them to the trace, so a bad rating isn't a data point on a chart but a doorway into the exact reasoning chain that annoyed a real human. Implicit: did they rephrase the question immediately (soft thumbs down)? Copy the answer (soft thumbs up)? Abandon the session? Most users never touch a rating button, so implicit signals are all the feedback you get from most of your traffic.
+
+**5. Accuracy and quality.** Task completion rate, correctness, relevance, completeness, clarity, safety. Harder to compute — which is what evaluation is for.
+
+Two practical notes. Alert thresholds: latency above 5x normal, error rate up more than 5 percentage points, cost at 2x expected, more than 1% of requests timing out. And a review cadence: daily error-log glance, weekly cost and performance trends, monthly optimization pass, quarterly user survey. Rhythm beats heroics.
+
+## Layer 4: Evaluation — Offline and Online
+
+Is your agent actually *good*? Evaluation splits into two worlds.
+
+**Offline evaluation** happens in the lab. You have a test dataset — questions paired with known correct answers — you run your agent across it, and you score the results. The course's example is GSM8K, grade-school math, where answers are simply right or wrong:
+
+```python
+from datasets import load_dataset
+
+eval_set = load_dataset("gsm8k", "main", split="test").select(range(50))
+
+correct = 0
+for example in eval_set:
+    prediction = agent.run(example["question"])
+    expected = example["answer"].split("####")[-1].strip()
+    if extract_final_number(prediction) == expected:
+        correct += 1
+
+print(f"Accuracy: {correct / len(eval_set):.1%}")
+```
+
+Offline eval is controlled — same questions every time, so when the score moves it's because your agent changed. That gives you three superpowers: a **baseline**, **regression testing** (you changed the system prompt — did the score drop?), and **comparison** (is v2 actually better than v1, or does it just feel better because you're excited about it?).
+
+If you take one engineering habit from this post: run your eval set before and after every meaningful change, like a test suite. Because that's what it is.
+
+But offline evaluation has a blind spot the size of reality. Your test set is a frozen snapshot of what you imagined users would ask. Real users are relentlessly creative, and the world drifts. Which is why you also need **online evaluation** — measuring quality on real production traffic, continuously.
+
+Offline is a wind tunnel; online is actual weather. The wind tunnel gives you clean, repeatable comparisons in fake conditions. The weather is messy — but it's the thing that actually crashes planes. They feed each other in a loop: online tells you what's broken, traces tell you why, offline proves the fix worked. Failures found in production become new offline test cases, so the wind tunnel keeps getting more realistic.
+
+## LLM-as-Judge
+
+Both worlds share a bottleneck: somebody has to judge whether an answer is good. For math, string comparison works. For open-ended answers, you'd traditionally need a human — accurate, but slow, expensive, and unable to scale to thousands of daily interactions.
+
+The pattern that fixes this is **LLM-as-judge**: use a language model to grade your language model.
+
+```python
+JUDGE_PROMPT = """You are evaluating an AI agent's response.
+
+Question: {question}
+Response: {response}
+
+Rate the response from 1 to 10 on each dimension:
+1. Correctness — is it factually accurate?
+2. Completeness — does it fully answer the question?
+3. Clarity — is it easy to understand?
+4. Helpfulness — does it help the user achieve their goal?
+
+Provide reasoning for each rating, then return JSON:
+{{"correctness": N, "completeness": N, "clarity": N,
+  "helpfulness": N, "reasoning": "..."}}
+"""
+
+scores = judge_model.generate(
+    JUDGE_PROMPT.format(question=question, response=response)
+)
+
+# Attach scores back onto the trace
+langfuse.score(trace_id=trace_id, name="correctness", value=scores["correctness"])
+```
+
+Every production interaction gets automatically graded, and you chart quality over time exactly like latency and cost.
+
+But a judge you trust blindly is worse than no judge at all. The gotchas:
+
+- **Judges are gameable.** Models are biased toward confident, fluent, well-structured prose. A beautifully formatted wrong answer often outscores a scruffy right one.
+- **Shared blind spots.** If the judge and the agent are from the same model family, the judge can't catch what it can't see.
+- **Judges drift with their prompts.** A small rubric rewording shifts every score. Version your evaluation prompts like code.
+
+The defenses: always demand reasoning (it lets you audit the judge), anchor the rubric with concrete descriptions of what a 3 versus an 8 looks like, and periodically calibrate — score a sample yourself and check agreement. LLM-as-judge doesn't replace human judgment. It *rations* it.
+
+## GAIA: The Final Exam
+
+GAIA is the benchmark for general AI assistants, and it's the boss fight of the Hugging Face Agents Course — to earn the certificate, your agent must score 30% or higher on a set of GAIA questions.
+
+GAIA's design inverts older benchmarks. The questions are conceptually simple — a patient, careful human with a browser can solve them. But they're brutally hard for AI systems, because each demands the full agent skill stack in concert:
+
+- **Multi-step reasoning** — the answer is never on one page; you chain facts across hops.
+- **Tool use** — you must actually search, retrieve, calculate. A bare model reciting from memory gets nowhere.
+- **Multimodality** — images, documents, files that must be read and understood.
+- **Precision** — GAIA expects an *exact* answer. A specific number, a specific name. Not an essay in the neighborhood of the truth.
+
+That last property is quietly the most important. Exact-match grading means no partial credit for confident waffle. The benchmark is hallucination-proof by construction — you either did the work or you didn't.
+
+The numbers that made GAIA famous: at launch, **human respondents scored around 92%. GPT-4 equipped with plugins scored around 15%.** Let that gap sink in. On tasks where the human isn't doing anything superhuman — just patiently browsing, reading, and keeping track of intermediate facts. That gap is the clearest measurement anyone has produced of the distance between models that *know* things and agents that can reliably *do* things.
+
+And here's how everything in this post connects: how do you climb from 12% to 30% on GAIA? Not by staring at the aggregate score. You run the benchmark — that's offline evaluation. You open the trace of every failed task — that's observability. You classify the failures: here the search tool returned junk, here the agent reasoned correctly but formatted the answer wrong, here it gave up two steps early. Fix the biggest bucket, re-run, watch the score move. **Score tells you where you are; traces tell you why.**
+
+I walk through the full capstone in [the GAIA capstone post](/writing/gaia-capstone-agent).
+
+## Build Your Own Eval Set
+
+GAIA measures general assistant ability — but your agent probably isn't a general assistant. GAIA can't tell you if your support bot knows your refund policy. The recipe for your own eval set:
+
+1. **Start small.** Twenty to fifty questions beats zero. Grow it forever.
+2. **Source from reality.** Once in production, your traces and thumbs-down feedback are a machine that generates eval cases. Every real failure you fix becomes a permanent regression test.
+3. **Cover the spread.** Easy bread-and-butter queries, hard multi-step ones, and the nasty edges: ambiguous phrasing, questions your agent should refuse, questions where the correct answer is "I don't know."
+4. **Write down the expected answer** — or for open-ended tasks, a short rubric your LLM judge grades against.
+5. **Automate the run** so it's one command, and run it on every meaningful change.
+
+Twenty real questions with known answers will teach you more about your agent than any leaderboard, because they're *your users'* questions.
+
+## Key Takeaways
+
+1. **Agents fail silently.** No stack trace — just fluent, confident wrongness while your logs report success. That's why observability is a discipline, not a nice-to-have.
+2. **Instrumentation is nearly free, so do it on day one.** OpenTelemetry plus one instrumentor call, and every run produces a full trace — every thought, tool call, token, and cent.
+3. **Monitor the five families:** cost, latency, errors, user feedback, accuracy. Percentiles, not averages — agent pain lives in the tail.
+4. **Evaluation is two worlds and you need both.** Offline gives you control and regression protection; online gives you truth. LLM-as-judge bridges them at scale — if you demand reasoning and calibrate the judge.
+5. **GAIA is the measuring stick for real agency.** Humans ~92%, launch-era GPT-4 with plugins ~15%. That gap is the frontier.
+
+## What's Next?
+
+The next post is a joy ride: [agents playing Pokémon](/writing/agents-in-games-pokemon). It sounds like a toy. It's secretly one of the best evaluation environments ever devised — everything covered here, with the score displayed on screen.
+
+If you're starting from earlier in the course, begin with [what agents actually are](/writing/agents-101-what-are-they-why-now) and [building your first smolagents agent](/writing/smolagents-code-first-agents).
+
+## Further Reading
+
+- **The Agents Course:** [huggingface.co/learn/agents-course](https://huggingface.co/learn/agents-course)
+- **Langfuse docs:** [langfuse.com/docs](https://langfuse.com/docs)
+- **OpenTelemetry:** [opentelemetry.io](https://opentelemetry.io/)
+- **GAIA paper:** [arxiv.org/abs/2311.12983](https://arxiv.org/abs/2311.12983)
+- **GAIA leaderboard:** [huggingface.co/spaces/gaia-benchmark/leaderboard](https://huggingface.co/spaces/gaia-benchmark/leaderboard)
+- **Course org on Hugging Face:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 9 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/show/033IY4yRcIIausR9EybtAm?utm_source=generator"
+  width="100%"
+  height="352"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+---
+
+**Instrumented your first agent?** Read one trace all the way to the bottom and tell me what surprised you. Tweet [@maros_janco](https://twitter.com/maros_janco) or email maros@marosjanco.com.
