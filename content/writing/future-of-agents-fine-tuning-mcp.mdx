@@ -1,0 +1,238 @@
+---
+title: "The Future of Agents: Fine-Tuning for Function Calling, MCP, and What Compounds"
+date: "2026-07-03"
+summary: "LoRA fine-tuning for function calling with special tokens, PEFT and TRL, when fine-tuning beats prompting, multi-agent teams, the Model Context Protocol, and the field's open problems."
+tags: ["agents", "fine-tuning", "lora", "mcp", "peft", "trl", "multi-agent"]
+draft: false
+---
+
+# The Future of Agents: Fine-Tuning for Function Calling, MCP, and What Compounds
+
+For an entire course's worth of agents, tool use has worked the same way. You write a system prompt. You describe the tools in it — here's a function called `get_weather`, it takes a location, here's the reply format I want. And then you cross your fingers and trust the model to imitate that format.
+
+Mostly, it works. But you've felt the brittleness if you've built anything real. The model returns almost-JSON — a trailing comma, a missing quote — and your parser dies. It invents a tool that doesn't exist because the name sounded plausible. You tweak one sentence in the system prompt and the failure rate moves in ways you can't explain.
+
+That's the fundamental problem with prompt-based tool use: **you are renting a behavior at inference time, every single time, and paying for it in prompt tokens and fragility.**
+
+The course's first bonus unit asks a different question. What if the model didn't have to be *told* how to call tools — because it had been *trained* to? What if tool calling wasn't an instruction it follows, but a reflex it has?
+
+## Fine-Tuning for Function Calling
+
+The first important idea is where you start. Not from a raw base model — that model doesn't even know how to hold a conversation. You take a model that's already instruction-tuned and continue its training on a focused dataset: thousands of example conversations where the assistant correctly decides *when* to call a function, formats the call perfectly, reads the result, and answers.
+
+You're not building a new brain. You're sending a capable one to a short trade school.
+
+### The Training Data Is the Loop, Written Down
+
+Each training example is a little screenplay of the thought-act-observe cycle from [the very first post in this series](/writing/agents-101-what-are-they-why-now):
+
+1. **User:** "What's the weather tomorrow?"
+2. **Thought:** "I don't know tomorrow's weather. I need the forecast tool."
+3. **Action:** a structured call to `get_weather` with the location as an argument.
+4. **Observation:** the tool's actual response — sunny, mild.
+5. **Answer:** grounded in that observation.
+
+The reasoning pattern that started as a whiteboard diagram becomes the literal shape of the training data. The loop stops being a prompting strategy and becomes something the model has internalized in its weights.
+
+### Special Tokens: Invisible Punctuation
+
+Here's the subtle engineering problem. If thought, action, observation, and answer are just plain text in a row, how does anyone — human or parser — know where the reasoning ends and the function call begins?
+
+The answer is **special tokens**. Before training, you extend the model's vocabulary with new marker tokens: one pair wraps the model's internal reasoning, another wraps the function call, another wraps the tool's output. The training data uses them consistently, thousands of times:
+
+```text
+<start_of_turn>human
+What's the weather in Paris tomorrow?<end_of_turn>
+<start_of_turn>model
+<think>The user wants a forecast. I should call get_weather.</think>
+<tool_call>{"name": "get_weather", "arguments": {"location": "Paris"}}</tool_call><end_of_turn>
+<start_of_turn>tool
+<tool_response>{"temperature": 18, "condition": "sunny"}</tool_response><end_of_turn>
+<start_of_turn>model
+Tomorrow in Paris: sunny and around 18°C.<end_of_turn>
+```
+
+Why does this matter so much? Three reasons.
+
+- **Structure.** The model learns hard boundaries between thinking and acting, so the phases stop bleeding into each other.
+- **Parseability.** Your runtime code stops playing regex roulette with free-form text. When the model emits the action marker, you know with near certainty that what follows is a well-formed call — the model has produced that exact pattern thousands of times in training. Extract the name and arguments, execute, wrap the result in observation markers, feed it back. The model knows exactly what that is. It's seen that movie before.
+- **Interpretability.** When something goes wrong, you see precisely which phase failed. Wrong thought? Malformed call? Ignored observation? The markers give you a debugging map.
+
+One practical wrinkle: these tokens are brand new, so their embeddings start out untrained — which is part of why you can't just prompt your way to this structure. The model has to *learn* what the markers mean, and that learning is the fine-tune.
+
+## LoRA: Why This Is Affordable
+
+Doesn't fine-tuning cost a fortune? Full fine-tuning — updating every weight — means billions of parameters, each carrying gradients and optimizer state. Serious multi-GPU territory, and most of us don't have a datacenter in the closet.
+
+Enter **LoRA — Low-Rank Adaptation** — one of my favorite ideas in all of applied machine learning, because it's so elegant.
+
+The insight: when you adapt a pretrained model to a new skill, the change you're making to its weights is not arbitrary. You're *nudging* an existing capability — and that nudge, the difference between old and new weights, can be captured by something mathematically much simpler than a full weight matrix. It has low rank, in the linear-algebra sense. A big change described by a small recipe.
+
+So LoRA says: **freeze the entire base model.** Don't touch a single original weight. Instead, next to certain weight matrices — typically the query and value projections inside the attention layers — inject a pair of small matrices. One projects the input down into a tiny space (rank 16, say), the other projects it back up. During training, only these adapters learn. During inference, their output is scaled and added to what the frozen layer produces — the base model's knowledge plus your trained correction, side by side.
+
+The arithmetic is what makes your jaw drop. The adapter pairs amount to a tiny sliver of the network — the course quotes a reduction in trainable parameters of more than 90%, and in typical setups it's far beyond that, often under 1% of the original count. Which cascades into everything: gradients and optimizer state only exist for the adapters, so memory collapses, training gets fast, and fine-tuning a small model fits on a single consumer GPU — or the free tier of a hosted notebook. And when you're done, you save just the adapter — megabytes, not gigabytes. Keep one base model on disk and **swap adapters like lenses on a camera**: a function-calling adapter today, a summarization adapter tomorrow, same frozen base underneath.
+
+## The Notebook: PEFT + TRL
+
+The course walks this end to end with a small instruction-tuned Gemma-family model — the 2B-parameter class — and a function-calling dataset already formatted in the thought-act-observe structure with special tokens in place. LoRA is configured through **PEFT**, Hugging Face's parameter-efficient fine-tuning library:
+
+```python
+from peft import LoraConfig, get_peft_model
+
+peft_config = LoraConfig(
+    r=16,                                # the rank of the adapters
+    lora_alpha=64,                       # scaling factor
+    lora_dropout=0.05,
+    target_modules=["q_proj", "v_proj"], # which attention projections get adapters
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(model, peft_config)
+model.print_trainable_parameters()
+# trainable params: a fraction of a percent of the total
+```
+
+Training runs through the supervised fine-tuning trainer from **TRL**:
+
+```python
+from trl import SFTTrainer, SFTConfig
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset,   # thought-act-observe conversations
+    peft_config=peft_config,
+    args=SFTConfig(
+        output_dir="gemma-2b-function-calling",
+        num_train_epochs=1,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=4,
+        learning_rate=1e-4,
+    ),
+)
+
+trainer.train()
+trainer.push_to_hub("your-username/gemma-2b-function-calling")
+```
+
+A modest number of epochs later, you have an adapter you can push to the Hugging Face Hub under your own name. Your first fine-tuned function-calling model. That's not a metaphor — that's a checkpoint with your username on it.
+
+## When to Fine-Tune, When to Skip It
+
+This is the judgment call that separates engineers from tutorial-followers.
+
+**Reach for fine-tuning when:**
+
+- **Format reliability is non-negotiable** — a malformed call breaks a production pipeline, not a demo.
+- **You have a custom tool vocabulary** or domain-specific calling conventions that generic models keep fumbling.
+- **Economics push you toward a small self-hosted model.** A fine-tuned 2B model calling your tools reliably can beat renting a frontier model on cost, latency, *and* privacy — especially if your data can't leave your infrastructure.
+
+**Skip it when:**
+
+- **Your tools are still changing weekly.** Every tool-set change means new data and retraining; a prompt edit takes thirty seconds.
+- **You're pre-product-market-fit** and iteration speed is everything.
+- **The biggest hosted models are already good enough** at tool use out of the box, and you're happy paying for them.
+
+The mature take: **prompting is your prototype, fine-tuning is your optimization.** First make it work. Then, if reliability, cost, or privacy demand it — make it a reflex. Rented behavior becomes owned behavior.
+
+## From One Agent to a Team
+
+Everything so far has mostly been a single agent — one loop, one context window, one to-do list. But the multi-agent pattern from [the smolagents unit](/writing/smolagents-practice-tools-deployment) — an orchestrator delegating to a web-search worker — is a preview of the default architecture. Not because of mysticism about emergent teamwork. Two boring, powerful reasons:
+
+**Context isolation.** A single agent doing a complex task accumulates baggage — every search result and intermediate thought piles into one context window. The context gets long, the model gets distracted, and cost climbs, because you're paying to re-read all that history on every step. A worker agent gets a clean, narrow brief — "find me these three facts" — works in a small focused context, and returns a compact summary. Its messy intermediate steps never enter the orchestrator's context. The orchestrator stays strategic; the worker stays tactical; nobody drowns.
+
+**Ruthless cost allocation.** The orchestrator — the role that plans, decomposes, and judges — gets the strong, expensive model. The worker that reformats dates or scrapes pages runs on something much cheaper — including, and here the essay folds in on itself nicely, a small model you fine-tuned with LoRA for exactly that one job. A team of specialists, most of them cheap, coordinated by one expensive generalist. Any manager of humans will recognize the org chart.
+
+Serious agent products increasingly look like this internally — research assistants fanning out parallel search workers, coding agents splitting planning from editing from testing. The open frontier is what happens when the agents on a team aren't all *yours* — when your company's agent needs to negotiate with a vendor's agent. That needs a shared language.
+
+## MCP: The USB-C Moment
+
+Remember the bad old days of peripherals? Every phone had its own charger, every printer its own cable. Then USB-C arrived, and an entire accessory ecosystem bloomed because builders could target one standard instead of twenty.
+
+Tool integration for agents had exactly that disease. Build a great tool — a connector to your company's database — and you wrote one wrapper per framework, another for some vendor's proprietary function-calling format. Every model-tool pairing was a custom cable.
+
+The **Model Context Protocol (MCP)** is the USB-C move. It's an open standard, introduced by Anthropic in late 2024 and adopted widely since, defining a common way for AI applications to connect to tools and data. The shape: an **MCP server** wraps a capability — a database, a file system, a search API, your internal ticketing system — and exposes it in a standard format. Any MCP-capable **client** — a chat app, an IDE, an agent framework — can discover what the server offers and use it, with no bespoke glue. Write the server once; every compliant client plugs in.
+
+Why should one engineer care about a protocol? Because **standards change where the value sits.** Before USB-C, the moat was the proprietary cable. After, the moat was building the best device. As tool connection standardizes, the differentiator stops being integration plumbing and becomes the quality of your tools and the intelligence of your orchestration.
+
+The frontier beyond MCP is agent-to-agent communication. MCP standardizes how a model talks to *tools*. How does an agent discover another agent, verify its capabilities, delegate a task, and trust the result? There are early proposals — Google put forward an agent-to-agent protocol in 2025 — but the space is genuinely unsettled. Unsettled means the standards are still being written, and the people who understand the problem get to hold the pen.
+
+## The Honest List: What Nobody Has Solved
+
+A finale that only sells optimism would betray [the evaluation discipline](/writing/agent-evaluation-observability) this course teaches. The open problems, plainly:
+
+**1. Long-horizon planning and error compounding.** This one is arithmetic, and the arithmetic is brutal. Suppose your agent gets each step right 95% of the time — a genuinely good agent. Chain twenty steps:
+
+```python
+>>> 0.95 ** 20
+0.358...
+```
+
+The whole run comes out clean barely a third of the time. A worker who succeeds a third of the time isn't a worker — it's a slot machine. That's why reliable agents today are short-horizon, why checkpointing and human review gates are load-bearing structure, and why real autonomy needs agents that notice their own mistakes and recover — not just longer to-do lists.
+
+**2. Memory.** A context window is not memory — it's a desk, and when the desk fills up, papers fall off. Real memory means remembering last month's session, your preferences, the lesson from a past failure — and knowing what to *forget*, because storing everything and retrieving on similarity drags in stale, even contradictory context. Retrieval is the right substrate, but the field lacks a settled answer for an agent's episodic memory.
+
+**3. Safety and sandboxing.** What is your agent allowed to do when nobody's watching? Reading is one thing. Sending emails, moving money, deleting records — those are one-way doors. Treat generated code the way you'd treat any untrusted code: least privilege on every tool, sandboxes around execution, human approval gates on irreversible actions, audit logs under everything. Boring? Absolutely. So are seatbelts.
+
+**4. Evaluation beyond benchmarks.** GAIA is a wonderful compass — humans still comfortably outscore strong agent systems on it — but a benchmark is a proxy, and proxies saturate. GAIA can't tell you whether your support agent handled an angry customer with grace. Production evaluation — golden datasets from your own traces, LLM judges calibrated against human judgment — is permanent work. The loop is only as good as the eval.
+
+**5. Economics.** Every thought is tokens, and tokens are money and milliseconds. Per-token prices keep falling, but agents spend the savings on more steps. Measure cost per task, route easy work to cheap models, cache aggressively, reserve deep reasoning for moments that deserve it.
+
+Notice what just happened. Error compounding — answered by orchestration and checkpointing. Memory — answered by retrieval. Evaluation — a discipline you can learn. Cost — a judgment you build with practice. The open problems of the field map onto the syllabus of the course. You're not arriving late to a finished story. You're arriving exactly on time to an unfinished one — equipped.
+
+## Career Advice: What Compounds
+
+Bet on skills that stay valuable no matter which framework wins.
+
+- **Evaluation and observability.** Every company shipping agents hits the same wall — it demos great and they can't tell if it actually works. If you're the person who builds the eval harness, the golden dataset, the tracing that pinpoints the failing step — you're rare. Almost nobody invests here, which is precisely why you should.
+- **Tool design.** Anyone can wrap an API. Designing tools a model reliably uses well is a craft — crisp naming, argument schemas that make invalid calls hard to express, error messages the model can recover from. The tool interface is quietly the API design discipline of this decade.
+- **The prompt-versus-fine-tune judgment.** Knowing which lever to pull — prompt iteration, retrieval, or a LoRA fine-tune — and defending the choice with evidence rather than fashion is exactly the judgment that gets people paid.
+- **Systems thinking.** The agent is never just the model. It's retrieval plus tools plus orchestration plus memory plus evaluation plus cost — and the interesting failures live in the seams.
+
+On proof of work: the course hands you a portfolio. The certificate is the receipt; the projects are the meal. A [GAIA capstone agent](/writing/gaia-capstone-agent) published as a Hugging Face Space is a live artifact a hiring manager can click. A [battle-agent leaderboard ranking](/writing/agents-in-games-pokemon) is a wonderfully unambiguous line on a resume. A merged pull request into a library thousands of people use outweighs a page of self-description.
+
+On staying current without burning out: distinguish **load-bearing knowledge from news**. The thought-act-observe loop, retrieval, evaluation discipline, LoRA, orchestration patterns — load-bearing; changes slowly, compounds. Which startup shipped which demo this week — news; mostly irrelevant by next month.
+
+## Key Takeaways
+
+1. **Prompting rents tool-use behavior; fine-tuning owns it.** When reliability, cost, or privacy demand more than prompt engineering can promise, continue training an instruction-tuned model on thought-act-observe data with special tokens marking every phase.
+2. **LoRA is why that's affordable.** Freeze the base, train tiny low-rank adapters inside the attention layers, cut trainable parameters to a sliver, fine-tune on a single GPU — then swap adapters on one base like lenses on a camera.
+3. **The future of agents is teams** — an orchestrator that plans and delegates, specialist workers in clean isolated contexts, expensive intelligence only where it earns its keep.
+4. **Protocols like MCP commoditize integration plumbing** — so durable value moves to what you build on top: great tools, great orchestration, great evaluation.
+5. **The open problems — compounding errors, memory, safety, evaluation, cost — are not reasons for cynicism.** They're the job description.
+
+## What's Next?
+
+There is no next episode — this is the finale, and the next chapter isn't mine to write. It's yours. Run the fine-tuning notebook and push your first adapter to the Hub. Or take one project from this series — the [smolagents tool-builder](/writing/smolagents-code-first-agents), the [battle agent](/writing/agents-in-games-pokemon), the [GAIA capstone](/writing/gaia-capstone-agent) — from notebook to shipped. Ideas plus one shipped artifact beats ideas alone, every single time.
+
+The loop is yours now. Thought. Action. Observation. Go act.
+
+## Further Reading
+
+- **The Agents Course (Bonus Unit 1 — fine-tuning for function calling):** [huggingface.co/learn/agents-course](https://huggingface.co/learn/agents-course)
+- **PEFT docs:** [huggingface.co/docs/peft](https://huggingface.co/docs/peft)
+- **TRL docs:** [huggingface.co/docs/trl](https://huggingface.co/docs/trl)
+- **LoRA paper:** [arxiv.org/abs/2106.09685](https://arxiv.org/abs/2106.09685)
+- **Model Context Protocol:** [modelcontextprotocol.io](https://modelcontextprotocol.io/)
+- **Course org on Hugging Face:** [huggingface.co/agents-course](https://huggingface.co/agents-course)
+
+---
+
+## Listen to the Episode
+
+This essay is based on Episode 12 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/6ZqXL5k5vQD5AMZvnud8nH)**
+
+<iframe
+  style={{ borderRadius: "12px" }}
+  src="https://open.spotify.com/embed/episode/6ZqXL5k5vQD5AMZvnud8nH?utm_source=generator"
+  width="100%"
+  height="232"
+  frameBorder="0"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy"
+/>
+
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
+---
+
+**Pushed your first fine-tuned adapter to the Hub?** That's a milestone — tell me about it. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com.

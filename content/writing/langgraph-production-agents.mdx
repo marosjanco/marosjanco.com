@@ -268,7 +268,7 @@ What to watch across traces: **token usage** (your marginal cost — an agent th
 
 ## Determinism Wins at Scale
 
-Does anyone run this at serious scale? LangGraph's own docs cite Klarna, Uber, and J.P. Morgan. But the interesting part isn't the logos — it's that teams building production agents keep converging on the same shape: deterministic routing (the business knows its workflows, so the model doesn't freelance on process), escalation rules encoded as conditional edges a compliance reviewer can read, checkpointing for anything long-running, human sign-off as interrupts before consequential actions, and traces on everything.
+Does anyone run this at serious scale? LangGraph's own docs cite Klarna, Uber, and J.P. Morgan. But the interesting part isn't the logos — it's that production teams keep converging on the same shape: deterministic routing, escalation rules encoded as conditional edges a compliance reviewer can read, checkpointing for anything long-running, human sign-off as interrupts before consequential actions, and traces on everything.
 
 They could let the model make every decision. They deliberately don't. They fence in the model's freedom exactly where freedom is a liability — process, policy, money, safety — and grant it freedom where it's an asset — language, reasoning, judgment within a step. The model is brilliant inside the boxes. The graph decides how the boxes connect.
 
@@ -276,7 +276,7 @@ They could let the model make every decision. They deliberately don't. They fenc
 
 The single most convincing demo in this course, and the audience is you:
 
-1. **Build the document analyst** above. Feed it a photo of any handwritten note — gym schedule, groceries — and ask for extraction, a calculation, and a summary.
+1. **Build the document analyst** above. Feed it a photo of any handwritten note and ask for extraction, a calculation, and a summary.
 2. **Stream it** in updates mode and watch the laps tick by: assistant, tools, assistant, tools, end.
 3. **The main event:** compile with a SQLite checkpointer and a thread ID. Then, while the agent is mid-run, kill the process. Really — Ctrl-C it between tool calls, no mercy. Restart, invoke the same thread ID, and watch it resume from its last checkpoint and finish the job. The first time you watch an agent survive its own murder, "production" stops being a chapter title and becomes something you can feel.
 4. **Stretch goal:** add Langfuse tracing, run the graph a few times, and read your own traces. Find your slowest span and your most expensive call. Everyone spots something they didn't expect.
@@ -304,18 +304,20 @@ In [LlamaIndex: Giving Agents Your Documents](/writing/llamaindex-document-agent
 
 ## Listen to the Episode
 
-This essay is based on Episode 6 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+This essay is based on Episode 6 of the HuggingFace Agents Course Podcast. **[Listen on Spotify](https://open.spotify.com/episode/6lq4CahlnBW6MLflsFr0kK)**
 
 <iframe
   style={{ borderRadius: "12px" }}
-  src="https://open.spotify.com/embed/show/033IY4yRcIIausR9EybtAm?utm_source=generator"
+  src="https://open.spotify.com/embed/episode/6lq4CahlnBW6MLflsFr0kK?utm_source=generator"
   width="100%"
-  height="352"
+  height="232"
   frameBorder="0"
   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
   loading="lazy"
 />
 
+Browse the whole series: **[The Agents Course Podcast on Spotify](https://open.spotify.com/show/033IY4yRcIIausR9EybtAm)**
+
 ---
 
-**Shipped an agent that survived a crash?** Share the story. Tweet [@maros_janco](https://twitter.com/maros_janco) or email maros@marosjanco.com. I want to see what you're building.
+**Shipped an agent that survived a crash?** Share the story. Tweet [@marosjanco](https://twitter.com/marosjanco) or email maros@marosjanco.com. I want to see what you're building.
