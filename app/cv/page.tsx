@@ -211,10 +211,12 @@ export default function CvPage() {
       <section className="mt-12">
         <h2 className="font-serif text-[24px] font-semibold">Selected stack</h2>
         <p className="mt-4 font-mono text-[14px] leading-[1.7] text-muted">
-          Python · TypeScript · SQL · PyTorch · Langfuse · Vertex AI · AWS
-          Bedrock · Anthropic API · FastAPI · Next.js · Supabase / Postgres
-          (PGroonga) · PySpark · Databricks · Docker · Kubernetes · GitHub
-          Actions
+          Python · TypeScript · SQL · PyTorch · Scikit-learn · Pandas ·
+          LangGraph · LangChain · CrewAI · Smolagents · Claude Code · Claude
+          Agent SDK · Langfuse · LiteLLM · Vertex AI · Gemini API · AWS
+          Bedrock · Anthropic API · MCP · FastAPI · Next.js · Supabase /
+          Postgres (PGroonga) · PySpark · Databricks · Docker · Kubernetes ·
+          Grafana · GitHub Actions
         </p>
       </section>
 
