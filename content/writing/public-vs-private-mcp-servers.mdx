@@ -1,0 +1,118 @@
+---
+title: "Public vs Private MCP Servers on Claude and ChatGPT"
+date: "2026-08-20"
+summary: "What it actually costs and takes to list an MCP server in Claude's Directory or ChatGPT's app ecosystem — pricing, setup gotchas, and the judgment call between reach and control."
+tags: ["mcp", "agents", "claude", "chatgpt", "engineering"]
+draft: false
+---
+
+# Public vs Private MCP Servers on Claude and ChatGPT
+
+If you've built an MCP server for your product, you eventually hit the same fork in the road: keep it private, as a connector URL you hand to the users who need it, or submit it to a public directory where Claude or ChatGPT can surface it to strangers. The marketing pages make this sound like a formality — fill in a form, get discovered. It isn't. I went through the actual submission flow for both platforms with a real server, and most of what matters is not on the marketing page at all. It's in the fine print, the rejection reasons, and the parts of the runtime that nobody writes down until you trip over them.
+
+This is that trip, written up. Pricing and requirements as of **August 2026** — both platforms are moving fast enough that specifics here will drift; treat the structure of the argument as durable and the numbers as a snapshot.
+
+## The setup, briefly
+
+Both platforms now support remote MCP over **Streamable HTTP**, HTTPS only. Authentication is **OAuth 2.1 with PKCE**, and the part that trips up almost everyone doing this for the first time is dynamic client registration — [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591). The client registers itself with your auth server at connection time. **You leave client ID and client secret blank in the connector setup UI.** There is no credential to type in.
+
+This is the single most common point of confusion, because the failure mode looks exactly like a missing credential. If the client can't register — server unreachable, misconfigured auth endpoint, whatever — you get an error like "couldn't register with the sign-in service." The instinct is to go hunt for a client ID to paste in. Don't. That error means the server side is broken, not that you skipped a field, and inventing a client ID to fill the blank will break a setup that would otherwise have worked once you fixed the actual problem.
+
+Two more things worth knowing before you're staring at a 404 wondering what you did wrong:
+
+- **[RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)** protected-resource metadata is served path-suffixed to your MCP mount point — `/.well-known/oauth-protected-resource/mcp` if your server lives at `/mcp`. A 404 at the bare `/.well-known/oauth-protected-resource` is expected. It is not a bug in your server.
+- **DCR is deprecated-but-not-removed** in the MCP spec revision dated 2026-07-28. It still works, and it's still what you build against today, but it carries tail risk if you're planning distribution infrastructure years out. Anthropic's directory-only alternative — static, Anthropic-held client credentials instead of dynamic registration — is the one hedge either platform currently offers against that risk, and it's not available outside the directory.
+
+One gotcha specific to `fastmcp`, if that's your server framework: the top-level `title=` argument on a tool and `ToolAnnotations(title=...)` are populated **independently**. Setting one leaves the other `None`. If you set neither, the library synthesizes a name-derived title for you — which means a naive "does this tool have a title" check can pass clean while you never actually declared one anywhere. Worth an explicit assertion in your test suite, not just a glance at the rendered output.
+
+## Claude: the Directory requires an org you might not have
+
+Here's the first surprise, and it comes before you've written a single line of a submission form: **listing a connector in Anthropic's Directory requires a Team or Enterprise organization.** Individual Pro and Max plans have no org settings at all — the submission portal is a page that, for an individual account, simply doesn't exist. You cannot list a connector as an individual, full stop.
+
+So the floor to even attempt this is a subscription:
+
+- Team: **$20/seat/month billed annually, $25/seat billed monthly.**
+- Minimum seats: **2**, as of 20 July 2026 (down from 5 before that date, which used to put the floor considerably higher).
+
+**That puts the real floor at $40/month** for the cheapest path to being eligible to submit — not because the directory charges you anything, but because the org tier that unlocks the portal is not free. And it's not a one-time cost: the management dashboard where you edit your listing, read reviewer feedback, and watch health/usage metrics lives behind the same org gate. Let the subscription lapse and you don't just lose new-submission access — you keep whatever maintenance obligations your listing already carries (health monitoring, user expectations) while losing the ability to edit the listing or respond to anything. That's a nasty asymmetry to discover after the fact.
+
+Only org **Owners** can submit on a Team plan. Enterprise can delegate via a custom role carrying the **Directory** or **Libraries** permission, which is the only way to get a non-owner submitting without them holding the keys to the whole org.
+
+### What listing actually buys you
+
+This is the part that matters most, and it's easy to miss because it's not framed as the headline feature. **Directory entries and custom connectors run on identical infrastructure** — same runtime, same transport, same auth, same tool-calling. Listing in the directory does not upgrade your server's capabilities. What it changes is discoverability and presentation:
+
+- **Suggested Connectors.** This is the actual prize. When a user's task looks like something your connector would help with, Claude can recommend it in-chat — no user search required, ranked by usage. **Custom connectors — the kind anyone can add via a URL — are never eligible for this, ever, regardless of quality or usage.** This is the single biggest functional difference between public and private, and it's a hard line, not a setting you can toggle on a private connector.
+- **A prefilled install link.** Both directory and custom connectors support this: `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=NAME&connectorUrl=ENCODED_URL`. It only prefills the form — the user still has to confirm the add. So this isn't directory-exclusive, but it's the low-effort version of distribution you get either way, and it's worth using regardless of which path you take.
+- **Anthropic-held static client credentials**, instead of dynamic registration — the directory-only hedge against DCR's deprecated-but-not-removed status mentioned above.
+- **External-link allowlisting**, which skips the confirmation modal for links your connector serves — a small friction removal that matters more than it sounds like for conversion.
+- **A named listing card** with your logo, instead of a generic "Custom" label, plus a permanent URL: `claude.ai/directory/connectors/SLUG`. The slug is permanent — chosen once, unchangeable — so pick it like you'd pick a domain name, not a placeholder.
+
+Listings get one of two labels: **Verified**, meaning Anthropic tested it, or **Community**, meaning it was screened but not reviewed in depth. Community is the default; escalation to Verified is automatic rather than something you apply for separately. Read the fine print on "Verified" carefully, because it's explicitly **not a security audit** — it's Anthropic confirming the thing works as described, not vouching for what it does with your users' data.
+
+### What actually gets you rejected
+
+The requirements read like standard MCP hygiene until you look at what's a hard blocker versus a nice-to-have:
+
+- Every tool needs both a `title` **and** either `readOnlyHint` or `destructiveHint` set.
+- Authed services need OAuth 2.0 — no API-key-in-header shortcuts.
+- **A missing or incomplete privacy policy is an immediate rejection.** Not a request for revision — a rejection. If you're building toward directory submission, write the privacy policy before you write the submission form, not after.
+- A public docs URL, live by the time you publish.
+- A fully populated test account, because reviewers actually use your server, not just read about it.
+
+One more operational detail worth planning around: the **health badge on your listing goes Degraded above a 5% 30-day disconnect rate.** That's a real number attached to your public reputation, and it's driven by your server's actual uptime and reliability, not by anything you control in the listing itself.
+
+Two things that are easy to conflate but shouldn't be: the Anthropic Directory is **independent of the open MCP Registry** — being in one does not put you in the other, and publishing to the directory does nothing for your discoverability through the open registry. And **desktop extensions (MCPB)** are a completely separate submission form that skips the whole portal described above — different artifact, different process, not a shortcut into the directory.
+
+## ChatGPT: no subscription gate, but a much sharper set of rules
+
+OpenAI's side inverts the friction. I found **no subscription requirement** to submit an app or connector — the gate is identity and infrastructure, not a seat count. You need a **verified developer or business identity** in the platform dashboard, and **domain verification** for whatever host serves your MCP endpoint. No $40/month floor, but also no shortcut around proving you're a real entity running real infrastructure.
+
+The testing bar is more concrete than Anthropic's. OpenAI wants **five positive and three negative test cases** submitted with your app, plus **test credentials with 2FA disabled** so reviewers can actually get in. Tool annotations follow the same `readOnlyHint` / `destructiveHint` pattern as Claude, plus a third: `openWorldHint`, flagging whether a tool's output space is bounded or effectively unbounded.
+
+If you're building something in the deep-research integration style, there's a naming constraint that's easy to miss because it looks like a suggestion and is actually a requirement: the tool names **`search` and `fetch` are fixed**. ChatGPT dispatches on those exact names for that integration pattern — rename them and the integration silently stops being recognized as that pattern, no error message pointing at the cause.
+
+### The commerce rules are the real trap
+
+This is the part worth a paragraph on its own, because it's the kind of thing you only discover by actually submitting, not by reading the docs closely enough in advance. OpenAI's commerce policy is **considerably stricter than Anthropic's**: apps may transact only in physical goods, and — this is the trap — **must not display subscription plans, initiate subscriptions, or promote upgrades** anywhere in the app's surface.
+
+Read that literally. It's not just "don't sell subscriptions through the MCP tool call." It means **an error message is in scope.** If your tool returns something like "Upgrade to a plan with higher limits to use this feature" when a free-tier user hits a paywall, that string — inside tool output, not a UI screen — violates the policy. This is exactly the kind of failure mode that never shows up in a checklist you read before submitting, because the checklist says "no subscription promotion" and your brain files that under "don't build a pricing page," not "audit every error string your tools can return." If your product has tiered access at all, this needs a deliberate pass over every user-facing string your MCP server can emit, not just the ones you wrote on purpose to sell something.
+
+## The comparison, side by side
+
+| | Claude Directory | ChatGPT app/connector directory |
+|---|---|---|
+| **Subscription gate** | Team/Enterprise org required; Team floor **$40/mo** (2 seats × $20, annual) | None found — identity/domain verification instead |
+| **Who can submit** | Org Owners (Team); custom role w/ Directory or Libraries permission (Enterprise) | Verified developer or business account |
+| **Infrastructure vs. custom connector** | Identical — directory changes discoverability, not capability | N/A — no separate "custom connector" tier in the same sense |
+| **Discovery mechanism** | Suggested Connectors — usage-ranked, in-chat recommendation | Standard directory listing/search |
+| **Review depth** | Two tiers: Community (screened) vs Verified (tested, not audited) | Single review with concrete test-case requirements |
+| **Hard rejection triggers** | Missing/incomplete privacy policy | Commerce-policy violations, including in tool output text |
+| **Fixed naming constraints** | None found | `search`/`fetch` for deep-research-style integrations |
+| **Credential model** | Directory-only: Anthropic-held static credentials (hedge vs. DCR deprecation) | Standard OAuth 2.1 + PKCE / DCR |
+
+## How to actually decide
+
+This is the part that's more valuable than any checklist, and it's the part most comparison posts skip because it requires knowing your own product, not the platform.
+
+**If your tool is horizontal, global, and English-first**, directory discovery is worth real money. You're competing for attention across a huge, undifferentiated pool of potential users, and a ranked in-chat suggestion at the moment someone needs exactly what you do is worth more than most paid acquisition channels you could otherwise buy.
+
+**If your tool is a narrow, national-language vertical** — the example I keep coming back to is a Slovak legal-research tool — the calculus flips, but not in the direction you'd first assume. Your users don't browse a global connector catalogue looking for Slovak legal research; they arrive through your own channels — search, referral, word of mouth in a small professional community. Pure discovery value, in the sense of "strangers finding you by browsing," is low. **But in a niche this narrow, you may be the only relevant candidate for a given query**, which means a relevance-matched suggestion has close to zero competition when it does fire. Low discovery volume, high relevance density, when it hits.
+
+The strongest argument *for* listing, in either case, is Suggested Connectors specifically: being offered to someone already doing the thing your product does, in a worse way, at the exact moment they're doing it. That's not banner-ad discovery. That's a warm handoff at the point of need, and it's genuinely hard to buy that placement any other way.
+
+**The strongest argument against listing — and the one I think most people building in regulated or credentialed professions miss entirely — is that the same mechanism is the risk.** Proactive suggestion doesn't just reach people who need you. It reaches everyone whose task pattern-matches to your tool, including consumer-tier users you may be contractually or ethically obligated to exclude. If your product is built for licensed professionals — lawyers, accountants, clinicians, whoever your regulator or your own terms of service says it's for — and a consumer's casual question happens to look like the kind of thing your tool handles, Suggested Connectors can put you in front of that consumer with zero friction. And here's the part that makes this a real constraint rather than a paperwork problem: **MCP does not expose the calling client's plan tier to the server.** You cannot look at an incoming tool call and know whether it came from a free consumer account or a paid professional one. You cannot enforce a professional-only restriction technically at the protocol level — you can only represent it contractually, in your terms of service and privacy policy, and hope enforcement happens upstream of you, if it happens at all.
+
+For a horizontal consumer product that's a non-issue. For anything where "who is allowed to use this" is a compliance question and not just a pricing tier, it's the deciding factor, and it's the one thing the marketing pages for both directories never mention, because it isn't their problem to flag — it's yours.
+
+The hybrid that both platforms actually support, and that resolves most of this tension without giving up either side: **list a connector with conservative, safe-for-anyone defaults in the public directory, and separately hand enterprise or professional-tier customers a distinct URL as a custom connector with elevated permissions.** You get the Suggested Connectors reach on the safe subset of your functionality, and you keep the sensitive or higher-trust capability behind a link you control and only give to people you've actually qualified. Public reach and private control aren't mutually exclusive — they're two different connector URLs pointed at two different scopes of the same server.
+
+## What I'd tell someone starting this today
+
+Write the privacy policy first — it's the one Claude-side blocker that's pure process, no engineering, and it gates everything else. Audit every user-facing string your tools can emit if you're going anywhere near ChatGPT's directory and you have any kind of tiered pricing — the commerce rule catches people in the output text, not the obvious places. Decide the professional-access question before you submit anywhere, not after a Suggested Connectors placement puts you in front of someone you didn't want to serve. And budget the $40/month Claude Team floor into the decision honestly — it's not large, but it's a recurring cost for reach you may or may not actually need, depending on how horizontal your product really is.
+
+None of this is complicated once you've done it once. It's just not written down anywhere you'd find it before you needed it.
+
+---
+
+**Building an MCP server and hitting something that isn't in either platform's docs?** Email me at maros@marosjanco.com — I'll update this post as the requirements shift.
