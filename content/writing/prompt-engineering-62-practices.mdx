@@ -8,11 +8,13 @@ draft: false
 
 Most prompt-engineering advice is written from the demo. This is written from two systems that have to keep working.
 
-The first is **Upheal**, where I have led AI engineering since November 2023 — AI-generated clinical documentation for therapists. When I started, the product produced roughly ten note sections. It now produces **250+**, and each one is not a prompt but a *chain* of prompts, compiled at request time from a library of composable templates. Across that growth: 100+ production releases, multiple model generations, no quality regression, and AI cost down about 50%. Underneath it sits an LLM-as-judge evaluation framework on Langfuse — datasets, eval runs, trace-level debugging — and an A/B pipeline that gates releases. The definition of "good" came from clinicians, not from me. The models came from everywhere: Gemini, Claude, GPT-\*, Llama, across Vertex AI, Bedrock, Azure OpenAI and the Anthropic API.
+One is **Upheal**, where I have led AI engineering since November 2023: AI-generated clinical documentation for therapists, scaled from roughly ten note sections to **250+**, each one not a prompt but a *chain* of prompts, compiled at request time from a library of composable templates. The other is **Lexomat**, my own product: a Slovak and EU legal-research assistant running hybrid RAG over about 3.5 million legal documents, with a LangGraph ReAct agent, thirty-odd structured prompt files over eighteen shared partials, and a grounding regime with no tolerance at all — a fabricated statute citation is not a bad answer, it is a dead product.
 
-The second is **Lexomat**, my own product — a Slovak and EU legal-research assistant. Hybrid RAG over about 3.5 million legal documents (176K legislation items, 3.31M court decisions). A LangGraph ReAct agent with roughly twenty tools. Thirty-four POML prompt files plus eighteen shared partials, composed by includes. And a grounding regime with no tolerance at all: a fabricated statute citation is not a bad answer, it is a dead product. So generation is constrained over enumerated valid citation codes, citations are gated, hedging is tiered to evidence strength, a hallucination cascade runs behind it, temporal verification checks *deterministically* that a cited law was in force on the relevant date, and degeneration is detected rather than shipped.
+Between them: 100+ production releases across multiple model generations with no quality regression, AI cost down about 50%, an LLM-as-judge evaluation framework on Langfuse with datasets, eval runs and trace-level debugging, an A/B pipeline gating releases, and models from everywhere — Gemini, Claude, GPT-\*, Llama, across Vertex AI, Bedrock, Azure OpenAI and the Anthropic API. In one of them the definition of "good" came from clinicians. In the other, from advocates. In neither did it come from me.
 
-The thing worth saying up front: going from 10 sections to 250 was a systems problem, not a wordsmithing one. Hand-written monolithic prompts do not survive a 25× multiplier — you cannot review them, you cannot change a shared rule in one place, and you cannot tell whether a model swap broke section 173. What survives is a component library, a template compiler, and eval gates. Everything below is downstream of that.
+**I have not labelled which practice came from which system.** Most came from both, and the ones that did not travelled across quickly once they existed.
+
+The thing worth saying up front: a 25× expansion in sections is a systems problem, not a wordsmithing one. Hand-written monolithic prompts do not survive that multiplier — you cannot review them, you cannot change a shared rule in one place, and you cannot tell whether a model swap broke section 173. What survives is a component library, a template compiler, and eval gates. Everything below is downstream of that.
 
 Sixty-two practices, eleven groups. Numbered so you can argue with a specific one.
 
@@ -20,7 +22,7 @@ Sixty-two practices, eleven groups. Numbered so you can argue with a specific on
 
 The cheapest wins, and the ones teams skip fastest.
 
-- **1. Role and persona conditioning.** Anchor the model to a specific expert identity, not a vibe. "A Slovak advocate drafting a memo for a colleague" constrains register, vocabulary and risk appetite in one line.
+- **1. Role and persona conditioning.** Anchor the model to a specific expert identity, not a vibe. "A senior specialist writing for a peer, not for a layperson" constrains register, vocabulary and risk appetite in one line.
 - **2. Explicit success criteria in-prompt.** State what a good output looks like, not just what the task is. Most "the model misunderstood" bugs are the prompt never saying what winning meant.
 - **3. Negative constraints.** Name what not to do and what is out of scope. Models are far better at avoiding a named failure than at inferring an unnamed boundary.
 - **4. Delimiter discipline.** Separate instruction from data with XML or markdown tags, always, even when it looks unnecessary. This is a correctness practice and an injection defence at the same time.
@@ -40,10 +42,10 @@ What you put in the window matters more than how you phrase it.
 
 ## C. Composition and templating
 
-Where the 10-to-250 jump actually happened.
+Where a 25× expansion actually gets absorbed.
 
-- **13. Shared partials and includes.** One rule, one file, many prompts. Lexomat's eighteen shared partials mean a change to the citation-format rule is one edit, not thirty-four.
-- **14. Template compilation.** Assemble prompts programmatically from a component library at request time. Once you have 250 sections, a prompt is a build artifact, not a document.
+- **13. Shared partials and includes.** One rule, one file, many prompts. Eighteen shared partials mean a change to the citation-format rule is one edit, not thirty-four.
+- **14. Template compilation.** Assemble prompts programmatically from a component library at request time. Once you have hundreds of sections, a prompt is a build artifact, not a document.
 - **15. Prompts as versioned code.** In git, reviewed in PRs, diffable. If you cannot see what changed between two releases, you cannot attribute a quality drop to anything.
 - **16. Prompt registry with runtime versioning.** Ship a prompt change without a code deploy, and roll it back the same way. Prompt fixes should move at the speed of the problem.
 - **17. Variable schemas.** Pass a typed context object, not a bag of interpolated strings. A missing variable should be a type error at build time, not an empty string in production.
@@ -52,7 +54,7 @@ Where the 10-to-250 jump actually happened.
 
 - **18. Chain-of-thought or scratchpad.** Force the reasoning before the answer, in a field you can inspect and discard.
 - **19. Reason-before-score ordering.** Non-negotiable for judges: emit the reasoning first, the score second. Score-first anchors the reasoning to a number the model already committed to.
-- **20. Step-back prompting.** Establish the general principle before applying it to the specific case. In legal answers this is the difference between a rule correctly applied and a plausible-sounding conclusion.
+- **20. Step-back prompting.** Establish the general principle before applying it to the specific case. In a regulated domain this is the difference between a rule correctly applied and a plausible-sounding conclusion.
 - **21. Decomposition.** Split one hard prompt into a chain of easy ones. Each link becomes independently testable, which is the real payoff.
 - **22. Self-critique pass.** Have the model review its own draft against the stated criteria. Cheap, and it catches the format and completeness failures reliably even when it is soft on substance.
 - **23. Plan-then-execute.** Separate the planning call from the generation call. A plan you can inspect is a failure you can catch before it costs you output tokens.
@@ -62,7 +64,7 @@ Where the 10-to-250 jump actually happened.
 Length is the single most under-specified property in production prompts.
 
 - **24. Schema-enforced structured output.** Pydantic or JSON schema at the API layer, not "please return JSON" in the prompt. Politeness is not a parser.
-- **25. Per-section length budgets.** Explicit word or sentence caps per field. Across 250 sections this is the difference between a usable clinical note and eleven pages nobody reads.
+- **25. Per-section length budgets.** Explicit word or sentence caps per field. Across hundreds of sections this is the difference between a usable document and eleven pages nobody reads.
 - **26. Exemplar-length anchoring.** Your few-shot examples *are* your length spec, whatever the instructions say. A 300-word example under a "keep it brief" instruction produces 300 words, every time.
 - **27. Prefill and assistant-turn seeding.** Start the response for the model to lock the format. The cheapest structural guarantee available.
 - **28. Post-hoc compression pass.** A second cheap call that trims usually beats a stricter first prompt, because tightening the generation prompt tends to cost you content as well as words.
@@ -80,19 +82,19 @@ Length is the single most under-specified property in production prompts.
 
 The section that decides whether a domain product is shippable.
 
-- **35. Constrained generation.** Enumerate the valid IDs so invention is impossible. Lexomat generates citations by selecting from a supplied set of valid codes — the model cannot invent a statute number because it is never asked to produce one freely.
+- **35. Constrained generation.** Enumerate the valid IDs so invention is impossible. Generate citations by selecting from a supplied set of valid codes — the model cannot invent a statute number because it is never asked to produce one freely.
 - **36. Citation requirements with format enforcement.** Require citations, then validate their shape programmatically. An unparseable citation is a failed generation, not a formatting quirk.
 - **37. Evidence-tiered hedging.** Map grounding strength to permitted assertiveness. Strong retrieval earns a direct answer; thin retrieval earns an explicitly hedged one; nothing earns an abstention.
 - **38. "Say I don't know" licensing.** Give explicit permission to abstain, with an example of what abstaining looks like. Without it, the model's implicit instruction is always to produce something.
 - **39. Quote-before-answer.** Extract the supporting spans first, then reason over the extracted spans. It converts "is this grounded?" from a judgement call into a lookup.
-- **40. Post-generation verification.** Programmatic checks that every claim traces to a source. Lexomat verifies temporal validity deterministically — whether the cited law was in force on the relevant date is arithmetic, and arithmetic should never be delegated to a language model.
+- **40. Post-generation verification.** Programmatic checks that every claim traces to a source. Verify temporal validity deterministically — whether the cited law was in force on the relevant date is arithmetic, and arithmetic should never be delegated to a language model.
 
 ## H. Model and cost awareness
 
 - **41. Model routing per step.** Expensive model only where it changes the answer. Most of a 50% cost reduction is routing plus caching, not a heroic prompt rewrite.
 - **42. Prompt caching design.** Structure prompts for cache hits deliberately — stable prefix, volatile suffix, and no timestamp casually injected at the top.
 - **43. Cross-model portability testing.** Test prompts against a second provider before you need to. A prompt tuned to one model's quirks is a migration bill you have not received yet.
-- **44. Migration harness.** Re-validate the whole prompt library against a new model release in one run. With 250 sections and a model deprecation notice, this is the difference between a week and a quarter.
+- **44. Migration harness.** Re-validate the whole prompt library against a new model release in one run. With hundreds of sections and a model deprecation notice, this is the difference between a week and a quarter.
 - **45. Token budgeting per stage.** Budget tokens per pipeline stage and attribute measured cost to each. "The system is expensive" is not actionable; "step 4 is 60% of spend" is.
 
 ## I. Evaluation
