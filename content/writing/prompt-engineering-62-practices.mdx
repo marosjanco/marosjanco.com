@@ -1,0 +1,142 @@
+---
+title: "62 prompt-engineering practices from production"
+date: "2026-08-21"
+summary: "A practitioner's field guide: 62 practices across instruction design, context engineering, composition, reasoning control, output control, few-shot, grounding, cost, evaluation, expert collaboration and safety — drawn from scaling a clinical-documentation system from 10 to 250+ prompt-composed sections and from building a legal AI where a fabricated citation kills the product."
+tags: ["prompt-engineering", "llm", "production", "evaluation", "grounding", "rag"]
+draft: false
+---
+
+Most prompt-engineering advice is written from the demo. This is written from two systems that have to keep working.
+
+One is **Upheal**, where I have led AI engineering since November 2023: AI-generated clinical documentation for therapists, scaled from roughly ten note sections to **250+**, each one not a prompt but a *chain* of prompts, compiled at request time from a library of composable templates. The other is **Lexomat**, my own product: a Slovak and EU legal-research assistant running hybrid RAG over about 3.5 million legal documents, with a LangGraph ReAct agent, thirty-odd structured prompt files over eighteen shared partials, and a grounding regime with no tolerance at all — a fabricated statute citation is not a bad answer, it is a dead product.
+
+Between them: 100+ production releases across multiple model generations with no quality regression, AI cost down about 50%, an LLM-as-judge evaluation framework on Langfuse with datasets, eval runs and trace-level debugging, an A/B pipeline gating releases, and models from everywhere — Gemini, Claude, GPT-\*, Llama, across Vertex AI, Bedrock, Azure OpenAI and the Anthropic API. In one of them the definition of "good" came from clinicians. In the other, from advocates. In neither did it come from me.
+
+**I have not labelled which practice came from which system.** Most came from both, and the ones that did not travelled across quickly once they existed.
+
+The thing worth saying up front: a 25× expansion in sections is a systems problem, not a wordsmithing one. Hand-written monolithic prompts do not survive that multiplier — you cannot review them, you cannot change a shared rule in one place, and you cannot tell whether a model swap broke section 173. What survives is a component library, a template compiler, and eval gates. Everything below is downstream of that.
+
+Sixty-two practices, eleven groups. Numbered so you can argue with a specific one.
+
+## A. Instruction and task design
+
+The cheapest wins, and the ones teams skip fastest.
+
+- **1. Role and persona conditioning.** Anchor the model to a specific expert identity, not a vibe. "A senior specialist writing for a peer, not for a layperson" constrains register, vocabulary and risk appetite in one line.
+- **2. Explicit success criteria in-prompt.** State what a good output looks like, not just what the task is. Most "the model misunderstood" bugs are the prompt never saying what winning meant.
+- **3. Negative constraints.** Name what not to do and what is out of scope. Models are far better at avoiding a named failure than at inferring an unnamed boundary.
+- **4. Delimiter discipline.** Separate instruction from data with XML or markdown tags, always, even when it looks unnecessary. This is a correctness practice and an injection defence at the same time.
+- **5. Instruction placement.** Critical rules go at the end of a long context, where recency helps — or at both ends. A rule buried at token 8,000 of 30,000 is a suggestion.
+- **6. Precedence rules.** Say explicitly which instruction wins when two conflict. Otherwise the model arbitrates silently and inconsistently, and you debug the symptom for a week.
+
+## B. Context engineering
+
+What you put in the window matters more than how you phrase it.
+
+- **7. Retrieval-conditioned prompts.** Inject what is relevant to *this* request, not everything you happen to have. Available is not the same as useful.
+- **8. Conditional and dynamic assembly.** Wrap sections in `if` blocks so they render only when applicable. A prompt that always mentions a feature the user has not enabled teaches the model to talk about things that are not there.
+- **9. Context compression.** Roll long histories into summaries rather than replaying raw transcript. The cost curve and the attention curve both thank you.
+- **10. Ordering for attention.** Put the most relevant material first or last, never buried in the middle. The middle of a long context is where information goes to be ignored.
+- **11. Prefix stability for caching.** Static content first, volatile content last. This is a prompt-structure decision that shows up on the invoice.
+- **12. Deliberate context exclusion.** Cut inputs that measurably hurt. This is routinely the highest-leverage change available and almost nobody tries it, because adding context feels like effort and removing it feels like giving up.
+
+## C. Composition and templating
+
+Where a 25× expansion actually gets absorbed.
+
+- **13. Shared partials and includes.** One rule, one file, many prompts. Eighteen shared partials mean a change to the citation-format rule is one edit, not thirty-four.
+- **14. Template compilation.** Assemble prompts programmatically from a component library at request time. Once you have hundreds of sections, a prompt is a build artifact, not a document.
+- **15. Prompts as versioned code.** In git, reviewed in PRs, diffable. If you cannot see what changed between two releases, you cannot attribute a quality drop to anything.
+- **16. Prompt registry with runtime versioning.** Ship a prompt change without a code deploy, and roll it back the same way. Prompt fixes should move at the speed of the problem.
+- **17. Variable schemas.** Pass a typed context object, not a bag of interpolated strings. A missing variable should be a type error at build time, not an empty string in production.
+
+## D. Reasoning control
+
+- **18. Chain-of-thought or scratchpad.** Force the reasoning before the answer, in a field you can inspect and discard.
+- **19. Reason-before-score ordering.** Non-negotiable for judges: emit the reasoning first, the score second. Score-first anchors the reasoning to a number the model already committed to.
+- **20. Step-back prompting.** Establish the general principle before applying it to the specific case. In a regulated domain this is the difference between a rule correctly applied and a plausible-sounding conclusion.
+- **21. Decomposition.** Split one hard prompt into a chain of easy ones. Each link becomes independently testable, which is the real payoff.
+- **22. Self-critique pass.** Have the model review its own draft against the stated criteria. Cheap, and it catches the format and completeness failures reliably even when it is soft on substance.
+- **23. Plan-then-execute.** Separate the planning call from the generation call. A plan you can inspect is a failure you can catch before it costs you output tokens.
+
+## E. Output control, including length
+
+Length is the single most under-specified property in production prompts.
+
+- **24. Schema-enforced structured output.** Pydantic or JSON schema at the API layer, not "please return JSON" in the prompt. Politeness is not a parser.
+- **25. Per-section length budgets.** Explicit word or sentence caps per field. Across hundreds of sections this is the difference between a usable document and eleven pages nobody reads.
+- **26. Exemplar-length anchoring.** Your few-shot examples *are* your length spec, whatever the instructions say. A 300-word example under a "keep it brief" instruction produces 300 words, every time.
+- **27. Prefill and assistant-turn seeding.** Start the response for the model to lock the format. The cheapest structural guarantee available.
+- **28. Post-hoc compression pass.** A second cheap call that trims usually beats a stricter first prompt, because tightening the generation prompt tends to cost you content as well as words.
+- **29. Stop sequences and explicit terminators.** Boring, and they eliminate a whole class of trailing-garbage bugs.
+- **30. Style guides as shared partials.** Tone, register and formatting centralised in one file. Style drift across sections is what makes a compiled document read like it was written by a committee, because it was.
+
+## F. Few-shot
+
+- **31. Few-shot exemplars.** Still the workhorse. Two good examples routinely outperform a paragraph of description of those same examples.
+- **32. Negative exemplars.** Paired ✅/❌ examples, mined from real observed failures rather than imagined ones. "Do not do this" plus the concrete thing beats an abstract prohibition.
+- **33. Failure-driven curation.** Every production bug becomes an exemplar or a regression case. This is how a prompt library gets better instead of just getting longer.
+- **34. Ordering and count tuning.** Tune how many and in what order, and know when zero-shot wins. On a strong model, few-shot examples sometimes narrow the output distribution more than they help.
+
+## G. Grounding and anti-hallucination
+
+The section that decides whether a domain product is shippable.
+
+- **35. Constrained generation.** Enumerate the valid IDs so invention is impossible. Generate citations by selecting from a supplied set of valid codes — the model cannot invent a statute number because it is never asked to produce one freely.
+- **36. Citation requirements with format enforcement.** Require citations, then validate their shape programmatically. An unparseable citation is a failed generation, not a formatting quirk.
+- **37. Evidence-tiered hedging.** Map grounding strength to permitted assertiveness. Strong retrieval earns a direct answer; thin retrieval earns an explicitly hedged one; nothing earns an abstention.
+- **38. "Say I don't know" licensing.** Give explicit permission to abstain, with an example of what abstaining looks like. Without it, the model's implicit instruction is always to produce something.
+- **39. Quote-before-answer.** Extract the supporting spans first, then reason over the extracted spans. It converts "is this grounded?" from a judgement call into a lookup.
+- **40. Post-generation verification.** Programmatic checks that every claim traces to a source. Verify temporal validity deterministically — whether the cited law was in force on the relevant date is arithmetic, and arithmetic should never be delegated to a language model.
+
+## H. Model and cost awareness
+
+- **41. Model routing per step.** Expensive model only where it changes the answer. Most of a 50% cost reduction is routing plus caching, not a heroic prompt rewrite.
+- **42. Prompt caching design.** Structure prompts for cache hits deliberately — stable prefix, volatile suffix, and no timestamp casually injected at the top.
+- **43. Cross-model portability testing.** Test prompts against a second provider before you need to. A prompt tuned to one model's quirks is a migration bill you have not received yet.
+- **44. Migration harness.** Re-validate the whole prompt library against a new model release in one run. With hundreds of sections and a model deprecation notice, this is the difference between a week and a quarter.
+- **45. Token budgeting per stage.** Budget tokens per pipeline stage and attribute measured cost to each. "The system is expensive" is not actionable; "step 4 is 60% of spend" is.
+
+## I. Evaluation
+
+Everything above is unverifiable without this section.
+
+- **46. Golden dataset from real production cases.** Real inputs, real edge cases, real messiness. Twenty real cases beat two hundred invented ones.
+- **47. LLM-as-judge with anchored rubrics.** Write out what a 2 and what a 5 look like. A bare 1–5 scale measures the judge's mood as much as the output.
+- **48. Judge calibration against human labels.** Score a sample by hand and check agreement, periodically. An uncalibrated judge is a random number generator with a confident tone.
+- **49. A/B gating on releases.** The new prompt does not ship unless it is at least as good as the one in production. This is the mechanism that made 100+ releases without a quality regression possible — not care, a gate.
+- **50. Regression suites per prompt.** Each prompt owns its cases. Global averages hide the section you just broke.
+- **51. Trace-level debugging.** Observability on every step, so a bad output is a trace you read rather than a mystery you re-run. Nine times out of ten the model did something reasonable with one broken input.
+- **52. Implicit feedback signals.** User edits, re-asks and deletions are quality labels you are already collecting. In a documentation product, what the clinician edited is the most honest eval signal in the building.
+
+## J. Domain-expert collaboration
+
+You cannot prompt-engineer your way to a definition of good you do not have.
+
+- **53. Expert-authored rubrics translated into prompt constraints.** The expert writes what good means; you translate it into instructions and judge criteria. Both halves are work, and the translation is yours.
+- **54. Expert-in-the-loop output review.** Experts review real outputs; those reviews feed exemplar curation. This loop is where a domain product's quality actually comes from.
+- **55. Expert-labelled golden sets.** Labels from practitioners, not from the engineer's best guess. Your intuition about a clinical note or a legal memo is not evidence.
+- **56. Terminology and lexicon injection.** Supply the controlled vocabulary explicitly. Domains have house terms, and a model reaching for a near-synonym reads as incompetence to a specialist.
+- **57. Prompts legible to non-engineers.** Write prompts an expert can read and correct directly. The moment a clinician or an advocate can send you a redline of the prompt itself, your iteration loop gets an order of magnitude faster.
+
+## K. Robustness and safety
+
+- **58. Prompt injection defence.** Separate data from instructions, mark untrusted input as untrusted, and never let retrieved content sit in the same channel as your rules.
+- **59. Refusal and escalation paths.** Define in-prompt what the model does when it should not answer, including how it hands off. An undefined refusal is an improvised one.
+- **60. Degeneration detection.** Detect loops and repetition programmatically and fail the generation. Every model does this occasionally, and users read it as the product being broken, which it is.
+- **61. Retry with feedback.** Feed the validation error back into the retry instead of retrying blind. A blind retry is the same dice roll at double the cost.
+- **62. Idempotency and determinism controls.** Temperature, seeds and caching set deliberately per call. A pipeline where the same input can silently produce a different answer is a pipeline you cannot debug.
+
+## What actually moves the needle
+
+Not all sixty-two are equal, and pretending otherwise is how teams end up with a 4,000-token prompt and no eval set.
+
+The ones that move the needle, in order: **evaluation infrastructure** (46–52), because nothing else is verifiable without it; **composition and templating** (13–17), because it is what lets a prompt library grow past the point one person can hold in their head; **context engineering** (7–12), because what you retrieve and what you cut dominates how you phrase things; and in a domain product, **grounding** (35–40), because that is the failure mode that ends the product rather than annoying a user.
+
+The rest is hygiene — real, worth doing, and cheap. Delimiters, stop sequences, negative constraints and schema enforcement each remove a class of bug permanently for a few minutes of work. But hygiene does not compound. A team with excellent delimiters and no golden dataset is guessing with good manners.
+
+And the one nobody wants to hear: the highest-leverage practice on the list is number 12, deleting context. It is the only one that makes the system faster, cheaper and better at the same time, and it is the only one that feels, while you are doing it, like you are removing work rather than doing it.
+
+---
+
+If you are scaling a prompt system past the point where anyone can read all of it, or trying to get a grounded domain product to a quality bar you can defend, that is the work I do. Email me a paragraph about what you're building: [maros@marosjanco.com](mailto:maros@marosjanco.com).
