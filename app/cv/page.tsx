@@ -3,7 +3,7 @@ import { Container } from "@/components/Container";
 import { site } from "@/lib/site";
 
 const cvDescription =
-  "Curriculum vitae of Maroš Jančo — senior AI/ML engineer. 9+ years shipping production ML, NLP and LLM systems. Ex-Sword Health, Upheal, Cervest, BNP Paribas; founder of Lexomat.";
+  "Curriculum vitae of Maroš Jančo — senior AI/ML engineer. 9+ years shipping production ML, NLP and LLM systems. Ex-Upheal, Cervest, BNP Paribas; founder of Lexomat.";
 
 export const metadata: Metadata = {
   title: "CV",
