@@ -14,8 +14,22 @@ type CaseStudy = {
 
 const cases: CaseStudy[] = [
   {
+    company: "Sword Health",
+    meta: "Senior AI Engineer, Platform · Jul – Nov 2026",
+    question:
+      "How do you pick, evaluate and cost-control the models behind agentic products serving many teams?",
+    headline:
+      "Evaluated and delivered a custom-trained LLM 40% faster at p50 at comparable quality, benchmarked against open-source and Claude Sonnet models with agentic evals and multiple LLM judges.",
+    detail: [
+      "Audited agent memory and compaction in production; built a production memory dashboard and showed by simulation how a redesign would cut agentic costs by 20%.",
+      "Automated model comparisons with agent skills that generate consistently structured, repeatable wiki reports.",
+      "From Platform, reviewed PRs on agentic behaviour, prompts and internal apps for all product teams; coached them on cost-aware, PHI-safe, spec-driven agentic development.",
+    ],
+    stack: "Python · SQL · LLM-as-judge · agentic evals · agent skills",
+  },
+  {
     company: "Upheal",
-    meta: "Senior AI Engineer · Nov 2023 – Present",
+    meta: "Senior AI Engineer · Nov 2023 – Jun 2026",
     question:
       "How do you ship LLM products that don't regress in production, across 100+ releases and multiple model generations?",
     headline:
