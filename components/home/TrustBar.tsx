@@ -4,6 +4,7 @@ import { Container } from "@/components/Container";
 // v1 renders monochrome text wordmarks at reduced opacity. Pre-launch task
 // (spec §9.1): replace with sourced monochrome brand SVGs.
 const companies = [
+  "Sword Health",
   "Upheal",
   "Cervest",
   "BNP Paribas",

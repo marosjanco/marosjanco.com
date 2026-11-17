@@ -167,7 +167,7 @@ export default function SkPage() {
         <Container width="reading">
           <SectionHeading>Prečo ja</SectionHeading>
           <p className="text-[17px] leading-[1.7]">
-            Senior AI inžinier s viac než 10 rokmi v AI — nie prezentácie, ale
+            Senior AI inžinier s viac než 9 rokmi v AI — nie prezentácie, ale
             fungujúci softvér. Vyštudoval som Imperial College London a UCL
             s Google DeepMind profesormi, 4 roky som v banke BNP Paribas
             automatizoval služby pomocou AI, v Upheal som znížil prevádzkové

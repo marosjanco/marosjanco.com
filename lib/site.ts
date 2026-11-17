@@ -5,7 +5,7 @@ export const site = {
   url: "https://marosjanco.com",
   email: "maros@marosjanco.com",
   description:
-    "Senior AI engineer for production LLM systems. Consulting on evaluations, RAG, agentic systems and MLOps. Ex-Upheal, Cervest, BNP Paribas. Founder of Lexomat.",
+    "Senior AI engineer for production LLM systems. Consulting on evaluations, RAG, agentic systems and MLOps. Ex-Sword Health, Upheal, Cervest, BNP Paribas. Founder of Lexomat.",
   // Capacity signal — review this monthly; it must stay true (spec trust signal).
   capacity: "Currently available for new engagements.",
   links: {
